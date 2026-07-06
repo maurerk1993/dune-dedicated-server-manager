@@ -104,9 +104,12 @@ pub fn xp_event_tags() -> &'static [XpEventTag] {
 }
 
 pub fn search_items(query: &str, limit: u32) -> Vec<Item> {
+    search_items_in(items(), query, limit)
+}
+
+pub fn search_items_in(all: &[Item], query: &str, limit: u32) -> Vec<Item> {
     let q = query.trim().to_lowercase();
     let cap = limit.clamp(1, 200) as usize;
-    let all = items();
     if q.is_empty() {
         return all.iter().take(50.min(cap)).cloned().collect();
     }
@@ -130,12 +133,15 @@ pub fn search_items(query: &str, limit: u32) -> Vec<Item> {
 }
 
 pub fn find_item(id: &str) -> Option<Item> {
+    find_item_in(items(), id)
+}
+
+pub fn find_item_in(all: &[Item], id: &str) -> Option<Item> {
     let needle = id.trim();
     if needle.is_empty() {
         return None;
     }
-    items()
-        .iter()
+    all.iter()
         .find(|item| item.id.eq_ignore_ascii_case(needle))
         .cloned()
 }

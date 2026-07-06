@@ -9,6 +9,9 @@ import type {
   DumpPruneTarget,
   HealthDto,
   HistoryDto,
+  ItemCatalogCheckDto,
+  ItemCatalogExportDto,
+  ItemCatalogStatusDto,
   ItemDto,
   LogDto,
   ManagementConnRequest,
@@ -53,6 +56,30 @@ export const managementApi = {
     invoke<CommandSpec[]>("ms_list_commands", { tunnelId }),
   searchItems: (tunnelId: string, q: string, limit?: number) =>
     invoke<ItemDto[]>("ms_search_items", { tunnelId, q, limit }),
+  itemCatalogStatus: (tunnelId: string) =>
+    invoke<ItemCatalogStatusDto>("ms_item_catalog_status", { tunnelId }),
+  itemCatalogCheck: (tunnelId: string, sourceUrl?: string) =>
+    invoke<ItemCatalogCheckDto>("ms_item_catalog_check", { tunnelId, sourceUrl }),
+  itemCatalogApply: (
+    tunnelId: string,
+    catalog: unknown,
+    sourceUrl: string | null,
+    sourceVersion: string | null,
+    confirmRemovals: boolean,
+  ) =>
+    invoke<ItemCatalogStatusDto>("ms_item_catalog_apply", {
+      tunnelId,
+      catalog,
+      sourceUrl,
+      sourceVersion,
+      confirmRemovals,
+    }),
+  itemCatalogRevert: (tunnelId: string) =>
+    invoke<ItemCatalogStatusDto>("ms_item_catalog_revert", { tunnelId }),
+  itemCatalogExport: (tunnelId: string) =>
+    invoke<ItemCatalogExportDto>("ms_item_catalog_export", { tunnelId }),
+  writeItemCatalogExport: (path: string, contents: string) =>
+    invoke<void>("write_item_catalog_export", { path, contents }),
   searchVehicles: (tunnelId: string, q: string, limit?: number) =>
     invoke<VehicleDto[]>("ms_search_vehicles", { tunnelId, q, limit }),
   searchSkillModules: (tunnelId: string, q: string, limit?: number) =>

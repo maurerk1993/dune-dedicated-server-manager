@@ -63,6 +63,26 @@ pub fn router(state: AppState) -> Router {
             axum::routing::get(api_admin::search_items),
         )
         .route(
+            "/api/admin/item-catalog/status",
+            axum::routing::get(api_admin::item_catalog_status),
+        )
+        .route(
+            "/api/admin/item-catalog/diff",
+            axum::routing::post(api_admin::item_catalog_diff),
+        )
+        .route(
+            "/api/admin/item-catalog/apply",
+            axum::routing::post(api_admin::item_catalog_apply),
+        )
+        .route(
+            "/api/admin/item-catalog/revert",
+            axum::routing::post(api_admin::item_catalog_revert),
+        )
+        .route(
+            "/api/admin/item-catalog/export",
+            axum::routing::get(api_admin::item_catalog_export),
+        )
+        .route(
             "/api/admin/items/grant-quality",
             axum::routing::post(api_admin::grant_quality_item),
         )

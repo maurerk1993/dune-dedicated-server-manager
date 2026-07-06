@@ -65,6 +65,7 @@ jobs:
           cp target/x86_64-unknown-linux-musl/release/dune-server-service release-artifacts/dune-server-service
           cp crates/dune-server-service/systemd/dune-server-service.service release-artifacts/dune-server-service.service
           cp crates/dune-server-service/openrc/dune-server-service release-artifacts/dune-server-service.openrc
+          cp crates/dune-server-service/data/items.json release-artifacts/item-catalog.json
 
       - name: Upload artifact for desktop bundle
         uses: actions/upload-artifact@v4
@@ -97,6 +98,7 @@ jobs:
             release-artifacts/dune-server-service
             release-artifacts/dune-server-service.service
             release-artifacts/dune-server-service.openrc
+            release-artifacts/item-catalog.json
 
   desktop-app:
     name: Build ${{ matrix.name }} app

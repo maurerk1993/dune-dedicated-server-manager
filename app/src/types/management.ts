@@ -120,6 +120,65 @@ export type ItemDto = {
   stackMax?: number | null;
 };
 
+export type ItemCatalogSummaryDto = {
+  source: string;
+  itemCount: number;
+  gradeableCount: number;
+  stackableCount: number;
+  catalogHash: string;
+};
+
+export type ItemCatalogMetadataDto = {
+  source: string;
+  sourceUrl: string | null;
+  sourceVersion: string | null;
+  sourceHash: string;
+  catalogHash: string;
+  appliedAt: string;
+  itemCount: number;
+  gradeableCount: number;
+  stackableCount: number;
+};
+
+export type ItemCatalogChangeDto = {
+  id: string;
+  before: ItemDto;
+  after: ItemDto;
+  fields: string[];
+};
+
+export type ItemCatalogDiffDto = {
+  current: ItemCatalogSummaryDto;
+  candidate: ItemCatalogSummaryDto;
+  sourceUrl: string | null;
+  sourceVersion: string | null;
+  added: ItemDto[];
+  removed: ItemDto[];
+  changed: ItemCatalogChangeDto[];
+  warnings: string[];
+  blockingErrors: string[];
+};
+
+export type ItemCatalogStatusDto = {
+  active: ItemCatalogSummaryDto;
+  bundled: ItemCatalogSummaryDto;
+  overrideMeta: ItemCatalogMetadataDto | null;
+  overrideError: string | null;
+};
+
+export type ItemCatalogCheckDto = {
+  diff: ItemCatalogDiffDto;
+  catalog: unknown;
+  sourceUrl: string | null;
+  sourceVersion: string | null;
+};
+
+export type ItemCatalogExportDto = {
+  catalogJson: string;
+  suggestedFileName: string;
+  summary: ItemCatalogSummaryDto;
+};
+
 export type VehicleDto = {
   id: string;
   actor_class: string;

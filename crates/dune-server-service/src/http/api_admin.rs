@@ -4,7 +4,7 @@ use futures::FutureExt;
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
 
-use crate::admin::{commands, data, players, MqPublisher};
+use crate::admin::{catalog, commands, data, players, MqPublisher};
 use crate::store::AdminHistoryFilter;
 
 use super::api_runs::ApiError;
@@ -20,10 +20,79 @@ pub struct SearchQuery {
     pub limit: Option<u32>,
 }
 
-pub async fn search_items(Query(q): Query<SearchQuery>) -> impl IntoResponse {
+pub async fn search_items(
+    State(state): State<AppState>,
+    Query(q): Query<SearchQuery>,
+) -> Result<impl IntoResponse, ApiError> {
     let query = q.q.unwrap_or_default();
     let limit = q.limit.unwrap_or(50);
-    Json(data::search_items(&query, limit))
+    let active = catalog::active_catalog(&state.store)?;
+    Ok(Json(data::search_items_in(&active.items, &query, limit)))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemCatalogCandidateRequest {
+    pub catalog: Value,
+    pub source_url: Option<String>,
+    pub source_version: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemCatalogApplyRequest {
+    pub catalog: Value,
+    pub source_url: Option<String>,
+    pub source_version: Option<String>,
+    #[serde(default)]
+    pub confirm_removals: bool,
+}
+
+pub async fn item_catalog_status(
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, ApiError> {
+    Ok(Json(catalog::status(&state.store)?))
+}
+
+pub async fn item_catalog_diff(
+    State(state): State<AppState>,
+    Json(req): Json<ItemCatalogCandidateRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let (diff, _) = catalog::diff_active_catalog(
+        &state.store,
+        &req.catalog,
+        req.source_url,
+        req.source_version,
+    )
+    .map_err(|err| ApiError::bad_request(err.to_string()))?;
+    Ok(Json(diff))
+}
+
+pub async fn item_catalog_apply(
+    State(state): State<AppState>,
+    Json(req): Json<ItemCatalogApplyRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let status = catalog::apply_catalog(
+        &state.store,
+        &req.catalog,
+        req.source_url,
+        req.source_version,
+        req.confirm_removals,
+    )
+    .map_err(|err| ApiError::bad_request(err.to_string()))?;
+    Ok(Json(status))
+}
+
+pub async fn item_catalog_revert(
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, ApiError> {
+    Ok(Json(catalog::revert_catalog(&state.store)?))
+}
+
+pub async fn item_catalog_export(
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, ApiError> {
+    Ok(Json(catalog::export_active_catalog(&state.store)?))
 }
 
 pub async fn search_vehicles(Query(q): Query<SearchQuery>) -> impl IntoResponse {
@@ -255,7 +324,8 @@ pub async fn grant_quality_item(
     }
     let quantity = validate_custom_tier_grant_quantity(req.quantity)?;
     validate_custom_tier_grant_quality(req.quality)?;
-    let Some(item) = data::find_item(item_id) else {
+    let active_catalog = catalog::active_catalog(&state.store)?;
+    let Some(item) = data::find_item_in(&active_catalog.items, item_id) else {
         return Err(ApiError::bad_request(format!(
             "item {item_id} was not found in the catalog"
         )));

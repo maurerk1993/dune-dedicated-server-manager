@@ -6,6 +6,9 @@ use tauri::Manager;
 
 use crate::state::TunnelRegistry;
 
+const DEFAULT_ITEM_CATALOG_URL: &str =
+    "https://github.com/maurerk1993/dune-dedicated-server-manager/releases/latest/download/item-catalog.json";
+
 pub fn ensure_client(app: &tauri::AppHandle) -> Client {
     if let Some(client) = app.try_state::<Client>() {
         return client.inner().clone();
@@ -345,6 +348,128 @@ pub async fn ms_grant_quality_item(
         }),
     )
     .await
+}
+
+#[tauri::command]
+pub async fn ms_item_catalog_status(
+    app: tauri::AppHandle,
+    registry: tauri::State<'_, TunnelRegistry>,
+    tunnel_id: String,
+) -> Result<Value, String> {
+    let port = tunnel_local_port(&registry, &tunnel_id)?;
+    let client = ensure_client(&app);
+    get_json(&client, port, "/api/admin/item-catalog/status").await
+}
+
+#[tauri::command]
+pub async fn ms_item_catalog_check(
+    app: tauri::AppHandle,
+    registry: tauri::State<'_, TunnelRegistry>,
+    tunnel_id: String,
+    source_url: Option<String>,
+) -> Result<Value, String> {
+    let port = tunnel_local_port(&registry, &tunnel_id)?;
+    let client = ensure_client(&app);
+    let requested_url = source_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|url| !url.is_empty())
+        .unwrap_or(DEFAULT_ITEM_CATALOG_URL);
+    let resp = client
+        .get(requested_url)
+        .send()
+        .await
+        .map_err(|err| format!("GET item catalog: {err}"))?;
+    let final_url = resp.url().to_string();
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body_text = resp.text().await.unwrap_or_default();
+        return Err(format!("GET item catalog -> {status}: {body_text}"));
+    }
+    let catalog = resp
+        .json::<Value>()
+        .await
+        .map_err(|err| format!("decoding item catalog: {err}"))?;
+    let diff = post_json(
+        &client,
+        port,
+        "/api/admin/item-catalog/diff",
+        &serde_json::json!({
+            "catalog": catalog.clone(),
+            "sourceUrl": final_url.clone(),
+            "sourceVersion": null,
+        }),
+    )
+    .await?;
+    Ok(serde_json::json!({
+        "diff": diff,
+        "catalog": catalog,
+        "sourceUrl": final_url,
+        "sourceVersion": null,
+    }))
+}
+
+#[tauri::command]
+pub async fn ms_item_catalog_apply(
+    app: tauri::AppHandle,
+    registry: tauri::State<'_, TunnelRegistry>,
+    tunnel_id: String,
+    catalog: Value,
+    source_url: Option<String>,
+    source_version: Option<String>,
+    confirm_removals: bool,
+) -> Result<Value, String> {
+    let port = tunnel_local_port(&registry, &tunnel_id)?;
+    let client = ensure_client(&app);
+    post_json(
+        &client,
+        port,
+        "/api/admin/item-catalog/apply",
+        &serde_json::json!({
+            "catalog": catalog,
+            "sourceUrl": source_url,
+            "sourceVersion": source_version,
+            "confirmRemovals": confirm_removals,
+        }),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn ms_item_catalog_revert(
+    app: tauri::AppHandle,
+    registry: tauri::State<'_, TunnelRegistry>,
+    tunnel_id: String,
+) -> Result<Value, String> {
+    let port = tunnel_local_port(&registry, &tunnel_id)?;
+    let client = ensure_client(&app);
+    post_json(
+        &client,
+        port,
+        "/api/admin/item-catalog/revert",
+        &serde_json::json!({}),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn ms_item_catalog_export(
+    app: tauri::AppHandle,
+    registry: tauri::State<'_, TunnelRegistry>,
+    tunnel_id: String,
+) -> Result<Value, String> {
+    let port = tunnel_local_port(&registry, &tunnel_id)?;
+    let client = ensure_client(&app);
+    get_json(&client, port, "/api/admin/item-catalog/export").await
+}
+
+#[tauri::command]
+pub async fn write_item_catalog_export(path: String, contents: String) -> Result<(), String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("export path must not be empty".to_string());
+    }
+    std::fs::write(trimmed, contents).map_err(|err| format!("writing item catalog export: {err}"))
 }
 
 #[tauri::command]

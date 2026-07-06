@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { save } from "@tauri-apps/plugin-dialog";
 import {
   AlertDialog,
   Badge,
@@ -19,6 +20,10 @@ import type {
   CommandSpec,
   FieldSpec,
   HistoryDto,
+  ItemCatalogChangeDto,
+  ItemCatalogCheckDto,
+  ItemCatalogDiffDto,
+  ItemCatalogStatusDto,
   ItemDto,
   PlayerSpecializationDto,
   PublishResultDto,
@@ -122,6 +127,7 @@ export default function AdminTab({ tunnelId, prefill, onPrefillConsumed }: Admin
   const [result, setResult] = useState<PublishResultDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [selectedPanel, setSelectedPanel] = useState<"commands" | "item-catalog">("commands");
   const appliedRef = useRef<{ selectedId: string; prefillFp: string | null } | null>(null);
   // Templates available for the currently-picked vehicle (SpawnVehicleAt).
   // Populated whenever values.ClassName changes so TemplateName renders as a
@@ -192,6 +198,7 @@ export default function AdminTab({ tunnelId, prefill, onPrefillConsumed }: Admin
     const target = commands.find((c) => c.id === prefill.commandId);
     if (!target) return;
     setSelected(target);
+    setSelectedPanel("commands");
   }, [prefill, commands, selected?.id]);
 
   useEffect(() => {
@@ -314,6 +321,16 @@ export default function AdminTab({ tunnelId, prefill, onPrefillConsumed }: Admin
         <Text size="2" weight="medium">
           Commands
         </Text>
+        <Box mt="2">
+          <Button
+            size="1"
+            variant={selectedPanel === "item-catalog" ? "solid" : "surface"}
+            onClick={() => setSelectedPanel("item-catalog")}
+            style={{ justifyContent: "flex-start", width: "100%" }}
+          >
+            Item Catalog
+          </Button>
+        </Box>
         {CATEGORY_ORDER.map((cat) => {
           const specs = grouped[cat];
           if (!specs || specs.length === 0) return null;
@@ -327,9 +344,12 @@ export default function AdminTab({ tunnelId, prefill, onPrefillConsumed }: Admin
                   <Button
                     key={spec.id}
                     size="1"
-                    variant={selected?.id === spec.id ? "solid" : "surface"}
+                    variant={selectedPanel === "commands" && selected?.id === spec.id ? "solid" : "surface"}
                     color={spec.destructive ? "red" : undefined}
-                    onClick={() => setSelected(spec)}
+                    onClick={() => {
+                      setSelected(spec);
+                      setSelectedPanel("commands");
+                    }}
                     style={{ justifyContent: "flex-start" }}
                   >
                     {spec.label}
@@ -341,7 +361,9 @@ export default function AdminTab({ tunnelId, prefill, onPrefillConsumed }: Admin
         })}
       </Box>
       <Box style={{ flex: "1 1 400px", minWidth: 0 }}>
-        {selected ? (
+        {selectedPanel === "item-catalog" ? (
+          <ItemCatalogPanel tunnelId={tunnelId} />
+        ) : selected ? (
           <Box>
             <Flex justify="between" align="baseline" wrap="wrap" gap="2">
               <Text size="3" weight="medium">
@@ -599,6 +621,428 @@ function ItemQualityControl({
       </Text>
     </Box>
   );
+}
+
+type CatalogReviewTab = "added" | "changed" | "removed";
+
+function ItemCatalogPanel({ tunnelId }: { tunnelId: string }) {
+  const [status, setStatus] = useState<ItemCatalogStatusDto | null>(null);
+  const [check, setCheck] = useState<ItemCatalogCheckDto | null>(null);
+  const [tab, setTab] = useState<CatalogReviewTab>("added");
+  const [confirmRemovals, setConfirmRemovals] = useState(false);
+  const [busy, setBusy] = useState<"status" | "check" | "apply" | "export" | "revert" | null>(
+    null,
+  );
+  const [revertOpen, setRevertOpen] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadStatus = useCallback(async () => {
+    setBusy((current) => current ?? "status");
+    setError(null);
+    try {
+      const next = await managementApi.itemCatalogStatus(tunnelId);
+      setStatus(next);
+    } catch (err) {
+      setError(apiErrorMessage(err));
+    } finally {
+      setBusy((current) => (current === "status" ? null : current));
+    }
+  }, [tunnelId]);
+
+  useEffect(() => {
+    void loadStatus();
+  }, [loadStatus]);
+
+  const checkForUpdates = useCallback(async () => {
+    setBusy("check");
+    setError(null);
+    setMessage(null);
+    setConfirmRemovals(false);
+    try {
+      const next = await managementApi.itemCatalogCheck(tunnelId);
+      setCheck(next);
+      setTab(firstNonEmptyTab(next.diff));
+      setMessage("Catalog update check completed.");
+    } catch (err) {
+      setError(apiErrorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  }, [tunnelId]);
+
+  const applyCatalog = useCallback(async () => {
+    if (!check) return;
+    setBusy("apply");
+    setError(null);
+    setMessage(null);
+    try {
+      const next = await managementApi.itemCatalogApply(
+        tunnelId,
+        check.catalog,
+        check.sourceUrl,
+        check.sourceVersion,
+        confirmRemovals,
+      );
+      setStatus(next);
+      setCheck(null);
+      setConfirmRemovals(false);
+      setMessage("Approved catalog applied to this server service.");
+    } catch (err) {
+      setError(apiErrorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  }, [check, confirmRemovals, tunnelId]);
+
+  const exportCatalog = useCallback(async () => {
+    setBusy("export");
+    setError(null);
+    setMessage(null);
+    try {
+      const exported = await managementApi.itemCatalogExport(tunnelId);
+      const path = await save({
+        defaultPath: exported.suggestedFileName,
+        filters: [{ name: "JSON", extensions: ["json"] }],
+      });
+      if (!path) return;
+      await managementApi.writeItemCatalogExport(path, exported.catalogJson);
+      setMessage(`Exported ${exported.summary.itemCount.toLocaleString()} items.`);
+    } catch (err) {
+      setError(apiErrorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  }, [tunnelId]);
+
+  const revertCatalog = useCallback(async () => {
+    setBusy("revert");
+    setError(null);
+    setMessage(null);
+    try {
+      const next = await managementApi.itemCatalogRevert(tunnelId);
+      setStatus(next);
+      setCheck(null);
+      setConfirmRemovals(false);
+      setRevertOpen(false);
+      setMessage("Reverted to the bundled item catalog.");
+    } catch (err) {
+      setError(apiErrorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  }, [tunnelId]);
+
+  const diff = check?.diff ?? null;
+  const hasRemovals = (diff?.removed.length ?? 0) > 0;
+  const blocked = (diff?.blockingErrors.length ?? 0) > 0;
+  const applyDisabled = !diff || blocked || (hasRemovals && !confirmRemovals) || busy !== null;
+
+  return (
+    <Box>
+      <Flex justify="between" align="baseline" wrap="wrap" gap="2">
+        <Text size="3" weight="medium">
+          Item Catalog
+        </Text>
+        {status ? (
+          <Badge color={status.active.source === "override" ? "amber" : "gray"}>
+            {status.active.source}
+          </Badge>
+        ) : null}
+      </Flex>
+      <Text size="1" color="gray">
+        Review catalog updates before they affect Grant Item searches or custom-tier item grants.
+      </Text>
+
+      {status ? <CatalogStatusSummary status={status} /> : null}
+
+      <Flex mt="3" gap="2" align="center" wrap="wrap">
+        <Button size="1" onClick={() => void checkForUpdates()} disabled={busy !== null}>
+          {busy === "check" ? "Checking..." : "Check for catalog updates"}
+        </Button>
+        <Button
+          size="1"
+          variant="soft"
+          onClick={() => void exportCatalog()}
+          disabled={busy !== null || !status}
+        >
+          {busy === "export" ? "Exporting..." : "Export repo-ready catalog"}
+        </Button>
+        <Button
+          size="1"
+          variant="soft"
+          color="red"
+          onClick={() => setRevertOpen(true)}
+          disabled={busy !== null || status?.active.source !== "override"}
+        >
+          Revert to bundled catalog
+        </Button>
+      </Flex>
+
+      {diff ? (
+        <Box mt="3">
+          <CatalogDiffSummary diff={diff} />
+          {diff.warnings.length > 0 ? (
+            <Flex direction="column" gap="1" mt="2">
+              {diff.warnings.map((warning) => (
+                <Text key={warning} size="1" color="amber">
+                  {warning}
+                </Text>
+              ))}
+            </Flex>
+          ) : null}
+          {diff.blockingErrors.length > 0 ? (
+            <Flex direction="column" gap="1" mt="2">
+              {diff.blockingErrors.map((item) => (
+                <Text key={item} size="1" color="red">
+                  {item}
+                </Text>
+              ))}
+            </Flex>
+          ) : null}
+
+          <Flex mt="3" gap="2" wrap="wrap">
+            <Button
+              size="1"
+              variant={tab === "added" ? "solid" : "surface"}
+              onClick={() => setTab("added")}
+            >
+              Added ({diff.added.length})
+            </Button>
+            <Button
+              size="1"
+              variant={tab === "changed" ? "solid" : "surface"}
+              onClick={() => setTab("changed")}
+            >
+              Changed ({diff.changed.length})
+            </Button>
+            <Button
+              size="1"
+              variant={tab === "removed" ? "solid" : "surface"}
+              color={diff.removed.length > 0 ? "red" : undefined}
+              onClick={() => setTab("removed")}
+            >
+              Removed ({diff.removed.length})
+            </Button>
+          </Flex>
+
+          <CatalogDiffTable diff={diff} tab={tab} />
+
+          {hasRemovals ? (
+            <Flex mt="3" gap="2" align="center">
+              <Checkbox
+                checked={confirmRemovals}
+                onCheckedChange={(value) => setConfirmRemovals(Boolean(value))}
+              />
+              <Text size="1" color="red">
+                I reviewed the removals and want to apply this catalog anyway.
+              </Text>
+            </Flex>
+          ) : null}
+
+          <Flex mt="3" gap="2" align="center" wrap="wrap">
+            <Button onClick={() => void applyCatalog()} disabled={applyDisabled}>
+              {busy === "apply" ? "Applying..." : "Apply approved catalog"}
+            </Button>
+            <Text size="1" color="gray">
+              Source: {diff.sourceUrl || "unknown"} · hash {shortHash(diff.candidate.catalogHash)}
+            </Text>
+          </Flex>
+        </Box>
+      ) : null}
+
+      {status?.overrideError ? (
+        <Text size="1" color="red" as="div" mt="2">
+          Override ignored: {status.overrideError}
+        </Text>
+      ) : null}
+      {message ? (
+        <Text size="1" color="green" as="div" mt="2">
+          {message}
+        </Text>
+      ) : null}
+      {error ? (
+        <Text size="1" color="red" as="div" mt="2">
+          {error}
+        </Text>
+      ) : null}
+
+      <AlertDialog.Root open={revertOpen} onOpenChange={setRevertOpen}>
+        <AlertDialog.Content maxWidth="440px">
+          <AlertDialog.Title>Revert item catalog?</AlertDialog.Title>
+          <AlertDialog.Description size="2">
+            This removes the local catalog override from this server service. Grant Item will use
+            the bundled catalog again.
+          </AlertDialog.Description>
+          <Flex gap="2" mt="4" justify="end">
+            <AlertDialog.Cancel>
+              <Button variant="soft" color="gray">
+                Cancel
+              </Button>
+            </AlertDialog.Cancel>
+            <Button color="red" disabled={busy === "revert"} onClick={() => void revertCatalog()}>
+              {busy === "revert" ? "Reverting..." : "Revert"}
+            </Button>
+          </Flex>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
+    </Box>
+  );
+}
+
+function CatalogStatusSummary({ status }: { status: ItemCatalogStatusDto }) {
+  return (
+    <Flex mt="3" gap="2" wrap="wrap">
+      <CatalogMetric label="Active items" value={status.active.itemCount} />
+      <CatalogMetric label="Gradeable" value={status.active.gradeableCount} />
+      <CatalogMetric label="Stackable" value={status.active.stackableCount} />
+      <CatalogMetric label="Hash" value={shortHash(status.active.catalogHash)} />
+      {status.overrideMeta ? (
+        <CatalogMetric label="Applied" value={formatTime(status.overrideMeta.appliedAt)} />
+      ) : null}
+    </Flex>
+  );
+}
+
+function CatalogDiffSummary({ diff }: { diff: ItemCatalogDiffDto }) {
+  return (
+    <Flex gap="2" wrap="wrap">
+      <CatalogMetric label="Added" value={diff.added.length} />
+      <CatalogMetric label="Changed" value={diff.changed.length} />
+      <CatalogMetric label="Removed" value={diff.removed.length} />
+      <CatalogMetric label="Candidate items" value={diff.candidate.itemCount} />
+      <CatalogMetric label="Gradeable" value={diff.candidate.gradeableCount} />
+      <CatalogMetric label="Stackable" value={diff.candidate.stackableCount} />
+    </Flex>
+  );
+}
+
+function CatalogMetric({ label, value }: { label: string; value: number | string }) {
+  return (
+    <Box
+      style={{
+        border: "1px solid var(--gray-a6)",
+        borderRadius: 8,
+        padding: "8px 10px",
+        minWidth: 110,
+        background: "var(--color-panel-translucent)",
+      }}
+    >
+      <Text size="1" color="gray" as="div">
+        {label}
+      </Text>
+      <Text size="2" weight="medium" className={typeof value === "string" ? "mono" : undefined}>
+        {typeof value === "number" ? value.toLocaleString() : value}
+      </Text>
+    </Box>
+  );
+}
+
+function CatalogDiffTable({ diff, tab }: { diff: ItemCatalogDiffDto; tab: CatalogReviewTab }) {
+  const rows = tab === "added" ? diff.added : tab === "removed" ? diff.removed : diff.changed;
+  const empty = rows.length === 0;
+  return (
+    <Table.Root variant="surface" size="1" mt="2">
+      <Table.Header>
+        <Table.Row>
+          <Table.ColumnHeaderCell>Item</Table.ColumnHeaderCell>
+          <Table.ColumnHeaderCell>Category</Table.ColumnHeaderCell>
+          <Table.ColumnHeaderCell>Source</Table.ColumnHeaderCell>
+          <Table.ColumnHeaderCell>Metadata</Table.ColumnHeaderCell>
+        </Table.Row>
+      </Table.Header>
+      <Table.Body>
+        {empty ? (
+          <Table.Row>
+            <Table.Cell colSpan={4}>
+              <Text size="1" color="gray">
+                No {tab} items.
+              </Text>
+            </Table.Cell>
+          </Table.Row>
+        ) : tab === "changed" ? (
+          (rows as ItemCatalogChangeDto[]).map((change) => (
+            <CatalogChangeTableRow key={change.id} change={change} />
+          ))
+        ) : (
+          (rows as ItemDto[]).map((item, index) => (
+            <CatalogItemTableRow
+              key={`${item.id}-${item.category}-${item.source}-${index}`}
+              item={item}
+            />
+          ))
+        )}
+      </Table.Body>
+    </Table.Root>
+  );
+}
+
+function CatalogItemTableRow({ item }: { item: ItemDto }) {
+  return (
+    <Table.Row>
+      <Table.Cell>
+        <Text size="2" as="div">
+          {item.name}
+        </Text>
+        <Text size="1" color="gray" className="mono">
+          {item.id}
+        </Text>
+      </Table.Cell>
+      <Table.Cell>{item.category}</Table.Cell>
+      <Table.Cell>{item.source}</Table.Cell>
+      <Table.Cell>
+        <CatalogItemBadges item={item} />
+      </Table.Cell>
+    </Table.Row>
+  );
+}
+
+function CatalogChangeTableRow({ change }: { change: ItemCatalogChangeDto }) {
+  return (
+    <Table.Row>
+      <Table.Cell>
+        <Text size="2" as="div">
+          {change.after.name}
+        </Text>
+        <Text size="1" color="gray" className="mono">
+          {change.id}
+        </Text>
+      </Table.Cell>
+      <Table.Cell>{change.after.category}</Table.Cell>
+      <Table.Cell>{change.after.source}</Table.Cell>
+      <Table.Cell>
+        <Flex gap="1" wrap="wrap">
+          {change.fields.map((field) => (
+            <Badge key={field} color="blue">
+              {field}
+            </Badge>
+          ))}
+          <CatalogItemBadges item={change.after} />
+        </Flex>
+      </Table.Cell>
+    </Table.Row>
+  );
+}
+
+function CatalogItemBadges({ item }: { item: ItemDto }) {
+  return (
+    <Flex gap="1" wrap="wrap">
+      {item.gradeable ? <Badge color="amber">gradeable</Badge> : null}
+      {item.tier ? <Badge color="gray">tier {item.tier}</Badge> : null}
+      {item.stackMax ? <Badge color="gray">stack {item.stackMax}</Badge> : null}
+    </Flex>
+  );
+}
+
+function firstNonEmptyTab(diff: ItemCatalogDiffDto): CatalogReviewTab {
+  if (diff.added.length > 0) return "added";
+  if (diff.changed.length > 0) return "changed";
+  return "removed";
+}
+
+function shortHash(hash: string | null | undefined): string {
+  if (!hash) return "unknown";
+  return hash.length > 10 ? hash.slice(0, 10) : hash;
 }
 
 function SpecializationLevelPanel({

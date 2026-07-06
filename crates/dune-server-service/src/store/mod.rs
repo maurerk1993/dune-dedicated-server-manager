@@ -90,6 +90,34 @@ impl Store {
         })
     }
 
+    pub fn set_configs(&self, pairs: &[(&str, &str)]) -> Result<()> {
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|_| anyhow::anyhow!("store mutex poisoned"))?;
+        let tx = guard.transaction()?;
+        for (key, value) in pairs {
+            tx.execute(
+                "INSERT INTO task_config(key, value) VALUES (?1, ?2)
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                rusqlite::params![key, value],
+            )?;
+        }
+        tx.commit().map_err(Into::into)
+    }
+
+    pub fn delete_configs(&self, keys: &[&str]) -> Result<()> {
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|_| anyhow::anyhow!("store mutex poisoned"))?;
+        let tx = guard.transaction()?;
+        for key in keys {
+            tx.execute("DELETE FROM task_config WHERE key = ?1", rusqlite::params![key])?;
+        }
+        tx.commit().map_err(Into::into)
+    }
+
     /// Convenience for reading a value parseable as an integer.
     pub fn get_config_i64(&self, key: &str) -> Result<Option<i64>> {
         Ok(self
