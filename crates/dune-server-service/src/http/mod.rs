@@ -63,6 +63,10 @@ pub fn router(state: AppState) -> Router {
             axum::routing::get(api_admin::search_items),
         )
         .route(
+            "/api/admin/items/grant-quality",
+            axum::routing::post(api_admin::grant_quality_item),
+        )
+        .route(
             "/api/admin/vehicles",
             axum::routing::get(api_admin::search_vehicles),
         )
@@ -85,6 +89,14 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/admin/player-location",
             axum::routing::get(api_admin::player_location),
+        )
+        .route(
+            "/api/admin/specialization",
+            axum::routing::get(api_admin::specialization),
+        )
+        .route(
+            "/api/admin/specialization/level",
+            axum::routing::post(api_admin::set_specialization_level),
         )
         .route("/api/admin/cluster", axum::routing::get(api_admin::cluster))
         .route("/api/admin/history", axum::routing::get(api_admin::history))

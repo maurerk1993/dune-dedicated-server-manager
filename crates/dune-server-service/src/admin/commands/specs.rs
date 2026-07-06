@@ -398,6 +398,17 @@ pub static SPECS: &[CommandSpec] = &[
         build: BuildKind::Passthrough,
     },
     CommandSpec {
+        id: "SpecializationLevelXp",
+        label: "Specialization Level XP",
+        category: Category::Progression,
+        destructive: None,
+        needs_player: true,
+        allow_all_players: false,
+        describe: "Sets exact specialization track levels for an offline player.",
+        fields: &[],
+        build: BuildKind::Passthrough,
+    },
+    CommandSpec {
         id: "SkillsSetModuleLevel",
         label: "Set skill module level",
         category: Category::Progression,

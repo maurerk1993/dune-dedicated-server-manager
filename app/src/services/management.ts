@@ -17,6 +17,7 @@ import type {
   ManagementServiceStatus,
   PlayerDto,
   PlayerLocationDto,
+  PlayerSpecializationDto,
   PublishResultDto,
   RunDto,
   JourneyNodeDto,
@@ -74,6 +75,34 @@ export const managementApi = {
     invoke<PlayerDto[]>("ms_search_players", { tunnelId, q, limit }),
   playerLocation: (tunnelId: string, flsId: string) =>
     invoke<PlayerLocationDto>("ms_player_location", { tunnelId, flsId }),
+  specialization: (tunnelId: string, flsId: string) =>
+    invoke<PlayerSpecializationDto>("ms_specialization", { tunnelId, flsId }),
+  setSpecializationLevel: (
+    tunnelId: string,
+    flsId: string,
+    trackType: string,
+    level: number,
+  ) =>
+    invoke<PublishResultDto>("ms_set_specialization_level", {
+      tunnelId,
+      flsId,
+      trackType,
+      level,
+    }),
+  grantQualityItem: (
+    tunnelId: string,
+    flsId: string,
+    itemId: string,
+    quantity: number,
+    quality: number,
+  ) =>
+    invoke<PublishResultDto>("ms_grant_quality_item", {
+      tunnelId,
+      flsId,
+      itemId,
+      quantity,
+      quality,
+    }),
   cluster: (tunnelId: string) => invoke<ClusterDto>("ms_cluster", { tunnelId }),
   history: (tunnelId: string, limit?: number) =>
     invoke<HistoryDto[]>("ms_history", { tunnelId, limit }),

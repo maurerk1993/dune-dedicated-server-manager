@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use serde::Serialize;
 
 use super::conn::PgClient;
@@ -46,6 +46,50 @@ pub struct Player {
     pub level: Option<i32>,
     #[serde(rename = "partitionId")]
     pub partition_id: Option<i64>,
+    #[serde(rename = "accountId")]
+    pub account_id: i64,
+    #[serde(rename = "pawnId")]
+    pub pawn_id: i64,
+    #[serde(rename = "controllerId")]
+    pub controller_id: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdminPlayerTarget {
+    pub fls_id: String,
+    pub name: String,
+    pub online: String,
+    pub account_id: i64,
+    pub pawn_id: i64,
+    pub controller_id: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpecializationTrack {
+    pub track_type: String,
+    pub xp: i64,
+    pub level: f64,
+    pub xp_max: i32,
+    pub level_max: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlayerSpecialization {
+    pub player: AdminPlayerTarget,
+    pub tracks: Vec<SpecializationTrack>,
+    pub keystones_total: i64,
+    pub keystones_max: i32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetSpecializationResult {
+    pub track_type: String,
+    pub level: i32,
+    pub xp: i32,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -76,6 +120,7 @@ pub struct BackpackGrantItem {
     pub template_id: String,
     pub quantity: i64,
     pub stats_json: String,
+    pub quality_level: i64,
 }
 
 const PLAYER_STATE_COLUMN_SQL: &str = "
@@ -141,9 +186,46 @@ VALUES (
     TRUE,
     EXTRACT(EPOCH FROM now())::int8,
     $5::text::jsonb,
-    0
+    $6::int8
 )
 RETURNING id::int8
+";
+
+const ADMIN_PLAYER_TARGET_SQL: &str = "
+SELECT
+    COALESCE(enc.\"user\"::text, '') AS fls_id,
+    COALESCE(ps.character_name, '') AS character_name,
+    COALESCE(ps.online_status::text, '') AS online_status,
+    COALESCE(ps.account_id, 0)::int8 AS account_id,
+    COALESCE(ps.player_pawn_id, 0)::int8 AS pawn_id,
+    COALESCE(ps.player_controller_id, 0)::int8 AS controller_id
+FROM dune.player_state ps
+LEFT JOIN dune.encrypted_accounts enc ON enc.id = ps.account_id
+WHERE lower(COALESCE(enc.\"user\"::text, '')) = lower($1)
+ORDER BY ps.last_login_time DESC NULLS LAST
+LIMIT 1
+";
+
+const SPECIALIZATION_TRACKS_SQL: &str = "
+SELECT track_type::text AS track_type, xp_amount::int8 AS xp_amount, level::float8 AS level
+FROM dune.specialization_tracks
+WHERE player_id = $1::int8
+ORDER BY track_type
+";
+
+const SPECIALIZATION_KEYSTONE_COUNT_SQL: &str = "
+SELECT COUNT(*)::int8
+FROM dune.purchased_specialization_keystones
+WHERE player_id = $1::int8
+";
+
+const SET_SPECIALIZATION_LEVEL_SQL: &str = "
+SELECT dune.set_specialization_xp_and_level(
+    $1::int8,
+    $2::dune.specializationtracktype,
+    $3::int4,
+    $4::real
+)
 ";
 
 const CHAT_PLAYER_SQL: &str = "
@@ -190,7 +272,10 @@ WITH matches AS (
             ''
         ) AS last_seen,
         {level_expr} AS player_level,
-        a.partition_id
+        a.partition_id,
+        ps.account_id::int8 AS account_id,
+        COALESCE(ps.player_pawn_id, 0)::int8 AS pawn_id,
+        COALESCE(ps.player_controller_id, 0)::int8 AS controller_id
     FROM dune.player_state ps
     LEFT JOIN dune.accounts acct           ON acct.id = ps.account_id
     LEFT JOIN dune.encrypted_accounts enc  ON enc.id  = ps.account_id
@@ -199,7 +284,8 @@ WITH matches AS (
        OR lower(COALESCE(enc."user"::text, '')) LIKE lower($1)
        OR lower(COALESCE(acct.funcom_id::text, '')) LIKE lower($1)
 )
-SELECT fls_id, character_name, online_status, last_seen, player_level, partition_id
+SELECT fls_id, character_name, online_status, last_seen, player_level, partition_id,
+       account_id, pawn_id, controller_id
 FROM matches
 WHERE fls_id <> ''
 ORDER BY
@@ -277,9 +363,152 @@ pub async fn search_players(
             last_seen: row.try_get::<_, String>(3).unwrap_or_default(),
             level: row.try_get::<_, Option<i32>>(4).ok().flatten(),
             partition_id: row.try_get::<_, Option<i64>>(5).ok().flatten(),
+            account_id: row.try_get::<_, i64>(6).unwrap_or_default(),
+            pawn_id: row.try_get::<_, i64>(7).unwrap_or_default(),
+            controller_id: row.try_get::<_, i64>(8).unwrap_or_default(),
         });
     }
     Ok(out)
+}
+
+pub async fn resolve_admin_player_by_fls(
+    pg: &PgClient,
+    namespace: &str,
+    fls_id: &str,
+) -> Result<Option<AdminPlayerTarget>> {
+    let state = pg.client(namespace).await?;
+    let row = state
+        .client()
+        .query_opt(ADMIN_PLAYER_TARGET_SQL, &[&fls_id.trim()])
+        .await
+        .with_context(|| format!("resolving admin player {}", fls_id.trim()))?;
+    Ok(row.map(|row| AdminPlayerTarget {
+        fls_id: row.try_get::<_, String>(0).unwrap_or_default(),
+        name: row.try_get::<_, String>(1).unwrap_or_default(),
+        online: row.try_get::<_, String>(2).unwrap_or_default(),
+        account_id: row.try_get::<_, i64>(3).unwrap_or_default(),
+        pawn_id: row.try_get::<_, i64>(4).unwrap_or_default(),
+        controller_id: row.try_get::<_, i64>(5).unwrap_or_default(),
+    }))
+}
+
+pub fn is_player_online(status: &str) -> bool {
+    status.trim().eq_ignore_ascii_case("online")
+}
+
+pub const SPECIALIZATION_TRACK_ORDER: &[&str] =
+    &["Combat", "Crafting", "Exploration", "Gathering", "Sabotage"];
+pub const SPECIALIZATION_XP_MAX: i32 = 44_182;
+pub const SPECIALIZATION_LEVEL_MAX: i32 = 100;
+pub const SPECIALIZATION_KEYSTONE_MAX: i32 = 205;
+
+pub fn canonical_specialization_track(track: &str) -> Option<&'static str> {
+    SPECIALIZATION_TRACK_ORDER
+        .iter()
+        .copied()
+        .find(|candidate| candidate.eq_ignore_ascii_case(track.trim()))
+}
+
+pub fn clamp_specialization_level(level: i32) -> i32 {
+    level.clamp(0, SPECIALIZATION_LEVEL_MAX)
+}
+
+pub fn specialization_level_to_xp(level: i32) -> i32 {
+    let level = clamp_specialization_level(level);
+    if level >= SPECIALIZATION_LEVEL_MAX {
+        return SPECIALIZATION_XP_MAX;
+    }
+    let estimate = (3.107 * f64::from(level * level) + 131.1 * f64::from(level)).round() as i32;
+    estimate.clamp(0, SPECIALIZATION_XP_MAX)
+}
+
+pub async fn get_player_specialization(
+    pg: &PgClient,
+    namespace: &str,
+    player: AdminPlayerTarget,
+) -> Result<PlayerSpecialization> {
+    if player.controller_id <= 0 {
+        return Err(anyhow!(
+            "player {} does not have a valid controller id",
+            player.fls_id
+        ));
+    }
+
+    let state = pg.client(namespace).await?;
+    let rows = state
+        .client()
+        .query(SPECIALIZATION_TRACKS_SQL, &[&player.controller_id])
+        .await
+        .context("querying specialization tracks")?;
+    let mut by_track = std::collections::HashMap::<String, (i64, f64)>::new();
+    for row in rows {
+        let track = row.try_get::<_, String>(0).unwrap_or_default();
+        let xp = row.try_get::<_, i64>(1).unwrap_or_default();
+        let level = row.try_get::<_, f64>(2).unwrap_or_default();
+        by_track.insert(track.to_lowercase(), (xp, level));
+    }
+
+    let keystones_total = state
+        .client()
+        .query_opt(SPECIALIZATION_KEYSTONE_COUNT_SQL, &[&player.controller_id])
+        .await
+        .context("querying specialization keystone count")?
+        .map(|row| row.try_get::<_, i64>(0).unwrap_or_default())
+        .unwrap_or_default();
+
+    let tracks = SPECIALIZATION_TRACK_ORDER
+        .iter()
+        .map(|track| {
+            let (xp, level) = by_track
+                .get(&track.to_lowercase())
+                .copied()
+                .unwrap_or((0, 0.0));
+            SpecializationTrack {
+                track_type: (*track).to_string(),
+                xp,
+                level,
+                xp_max: SPECIALIZATION_XP_MAX,
+                level_max: f64::from(SPECIALIZATION_LEVEL_MAX),
+            }
+        })
+        .collect();
+
+    Ok(PlayerSpecialization {
+        player,
+        tracks,
+        keystones_total,
+        keystones_max: SPECIALIZATION_KEYSTONE_MAX,
+    })
+}
+
+pub async fn set_specialization_level(
+    pg: &PgClient,
+    namespace: &str,
+    controller_id: i64,
+    track_type: &str,
+    level: i32,
+) -> Result<SetSpecializationResult> {
+    let track = canonical_specialization_track(track_type)
+        .ok_or_else(|| anyhow!("unknown specialization track {track_type}"))?;
+    let level = clamp_specialization_level(level);
+    let xp = specialization_level_to_xp(level);
+    let level_real = level as f32;
+
+    let state = pg.client(namespace).await?;
+    state
+        .client()
+        .query_one(
+            SET_SPECIALIZATION_LEVEL_SQL,
+            &[&controller_id, &track, &xp, &level_real],
+        )
+        .await
+        .context("setting specialization level")?;
+
+    Ok(SetSpecializationResult {
+        track_type: track.to_string(),
+        level,
+        xp,
+    })
 }
 
 pub async fn list_welcome_accounts(pg: &PgClient, namespace: &str) -> Result<Vec<WelcomeAccount>> {
@@ -340,7 +569,7 @@ pub async fn insert_items_to_backpack(
         .context("finding free backpack slots")?;
     if slot_rows.len() != items.len() {
         return Err(anyhow::anyhow!(
-            "not enough free backpack slots for welcome package: needed {}, found {}",
+            "not enough free backpack slots: needed {}, found {}",
             items.len(),
             slot_rows.len()
         ));
@@ -349,7 +578,7 @@ pub async fn insert_items_to_backpack(
     let insert = tx
         .prepare(PLAYER_BACKPACK_INSERT_ITEM_SQL)
         .await
-        .context("preparing welcome item insert")?;
+        .context("preparing backpack item insert")?;
     let mut inserted_ids = Vec::with_capacity(items.len());
     for (item, slot) in items.iter().zip(slot_rows.iter()) {
         let position_index = slot.try_get::<_, i64>(0).unwrap_or_default();
@@ -362,17 +591,25 @@ pub async fn insert_items_to_backpack(
                     &position_index,
                     &item.template_id,
                     &item.stats_json,
+                    &item.quality_level,
                 ],
             )
             .await
-            .with_context(|| format!("inserting welcome item {}", item.template_id))?;
+            .with_context(|| format!("inserting backpack item {}", item.template_id))?;
         inserted_ids.push(row.try_get::<_, i64>(0).unwrap_or_default());
     }
 
     tx.commit()
         .await
-        .context("committing welcome item grant transaction")?;
+        .context("committing backpack item grant transaction")?;
     Ok(inserted_ids)
+}
+
+pub fn grant_item_stats_json(stack_max: Option<u32>) -> &'static str {
+    if stack_max.unwrap_or_default() > 1 {
+        return r#"{"FItemStackAndDurabilityStats":[[],{"DecayedMaxDurability":0.0}]}"#;
+    }
+    r#"{"FCustomizationStats":[[],{}],"FItemStackAndDurabilityStats":[[],{}]}"#
 }
 
 pub async fn resolve_chat_player(
@@ -411,4 +648,47 @@ async fn player_level_column(client: &tokio_postgres::Client) -> Result<Option<S
         .copied()
         .find(|candidate| available.contains(*candidate))
         .map(str::to_string))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn specialization_level_is_clamped_before_xp_estimate() {
+        assert_eq!(clamp_specialization_level(-10), 0);
+        assert_eq!(clamp_specialization_level(42), 42);
+        assert_eq!(clamp_specialization_level(500), SPECIALIZATION_LEVEL_MAX);
+    }
+
+    #[test]
+    fn specialization_xp_curve_matches_reference_bounds() {
+        assert_eq!(specialization_level_to_xp(0), 0);
+        assert_eq!(specialization_level_to_xp(100), SPECIALIZATION_XP_MAX);
+        assert_eq!(specialization_level_to_xp(500), SPECIALIZATION_XP_MAX);
+        assert_eq!(specialization_level_to_xp(45), 12_191);
+        assert_eq!(specialization_level_to_xp(53), 15_676);
+    }
+
+    #[test]
+    fn specialization_track_validation_is_case_insensitive() {
+        assert_eq!(canonical_specialization_track("combat"), Some("Combat"));
+        assert_eq!(canonical_specialization_track(" Sabotage "), Some("Sabotage"));
+        assert_eq!(canonical_specialization_track("Mentat"), None);
+    }
+
+    #[test]
+    fn grant_item_stats_follow_stack_shape() {
+        assert!(grant_item_stats_json(Some(500)).contains("DecayedMaxDurability"));
+        assert!(grant_item_stats_json(Some(1)).contains("FCustomizationStats"));
+        assert!(grant_item_stats_json(None).contains("FCustomizationStats"));
+    }
+
+    #[test]
+    fn online_status_check_is_strict() {
+        assert!(is_player_online("Online"));
+        assert!(is_player_online(" online "));
+        assert!(!is_player_online("Offline"));
+        assert!(!is_player_online(""));
+    }
 }

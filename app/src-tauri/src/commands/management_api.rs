@@ -285,6 +285,69 @@ pub async fn ms_player_location(
 }
 
 #[tauri::command]
+pub async fn ms_specialization(
+    app: tauri::AppHandle,
+    registry: tauri::State<'_, TunnelRegistry>,
+    tunnel_id: String,
+    fls_id: String,
+) -> Result<Value, String> {
+    let port = tunnel_local_port(&registry, &tunnel_id)?;
+    let client = ensure_client(&app);
+    let path = format!("/api/admin/specialization?flsId={}", urlencoding(&fls_id));
+    get_json(&client, port, &path).await
+}
+
+#[tauri::command]
+pub async fn ms_set_specialization_level(
+    app: tauri::AppHandle,
+    registry: tauri::State<'_, TunnelRegistry>,
+    tunnel_id: String,
+    fls_id: String,
+    track_type: String,
+    level: i32,
+) -> Result<Value, String> {
+    let port = tunnel_local_port(&registry, &tunnel_id)?;
+    let client = ensure_client(&app);
+    post_json(
+        &client,
+        port,
+        "/api/admin/specialization/level",
+        &serde_json::json!({
+            "flsId": fls_id,
+            "trackType": track_type,
+            "level": level,
+        }),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn ms_grant_quality_item(
+    app: tauri::AppHandle,
+    registry: tauri::State<'_, TunnelRegistry>,
+    tunnel_id: String,
+    fls_id: String,
+    item_id: String,
+    quantity: i64,
+    quality: i64,
+) -> Result<Value, String> {
+    let port = tunnel_local_port(&registry, &tunnel_id)?;
+    let client = ensure_client(&app);
+    post_json(
+        &client,
+        port,
+        "/api/admin/items/grant-quality",
+        &serde_json::json!({
+            "flsId": fls_id,
+            "itemId": item_id,
+            "quantity": quantity,
+            "quality": quality,
+        }),
+    )
+    .await
+}
+
+#[tauri::command]
 pub async fn ms_get_config(
     app: tauri::AppHandle,
     registry: tauri::State<'_, TunnelRegistry>,

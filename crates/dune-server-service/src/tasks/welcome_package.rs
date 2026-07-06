@@ -365,6 +365,7 @@ async fn process_item_package(
                 template_id: item_name.clone(),
                 quantity: *quantity,
                 stats_json: welcome_item_stats_json(item_name, *durability)?,
+                quality_level: 0,
             }),
         })
         .collect::<Result<Vec<_>>>()?;

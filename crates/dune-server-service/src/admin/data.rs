@@ -13,6 +13,12 @@ pub struct Item {
     pub name: String,
     pub category: String,
     pub source: String,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub gradeable: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tier: Option<u32>,
+    #[serde(rename = "stackMax", default, skip_serializing_if = "Option::is_none")]
+    pub stack_max: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,6 +40,10 @@ pub struct SkillModule {
 
 fn default_max_level() -> u32 {
     1
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -117,6 +127,17 @@ pub fn search_items(query: &str, limit: u32) -> Vec<Item> {
         .take(cap)
         .map(|(_, it)| it.clone())
         .collect()
+}
+
+pub fn find_item(id: &str) -> Option<Item> {
+    let needle = id.trim();
+    if needle.is_empty() {
+        return None;
+    }
+    items()
+        .iter()
+        .find(|item| item.id.eq_ignore_ascii_case(needle))
+        .cloned()
 }
 
 pub fn search_xp_event_tags(query: &str, limit: u32) -> Vec<XpEventTag> {
@@ -281,5 +302,20 @@ mod tests {
         let r = search_items("", 50);
         assert!(!r.is_empty());
         assert!(r.len() <= 50);
+    }
+
+    #[test]
+    fn find_item_matches_exact_id_case_insensitively() {
+        let id = items()[0].id.clone();
+        let lower = id.to_lowercase();
+        let found = find_item(&lower).expect("item found");
+        assert_eq!(found.id, id);
+    }
+
+    #[test]
+    fn gradeable_catalog_metadata_loads() {
+        let item = find_item("T6_Augment_Acuracy1").expect("known gradeable item");
+        assert!(item.gradeable);
+        assert_eq!(item.tier, Some(6));
     }
 }

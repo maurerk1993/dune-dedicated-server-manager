@@ -115,6 +115,9 @@ export type ItemDto = {
   name: string;
   category: string;
   source: string;
+  gradeable?: boolean;
+  tier?: number | null;
+  stackMax?: number | null;
 };
 
 export type VehicleDto = {
@@ -242,6 +245,33 @@ export type PlayerDto = {
   lastSeen: string;
   level: number | null;
   partitionId: number | null;
+  accountId: number;
+  pawnId: number;
+  controllerId: number;
+};
+
+export type AdminPlayerTargetDto = {
+  flsId: string;
+  name: string;
+  online: string;
+  accountId: number;
+  pawnId: number;
+  controllerId: number;
+};
+
+export type SpecializationTrackDto = {
+  trackType: string;
+  xp: number;
+  level: number;
+  xpMax: number;
+  levelMax: number;
+};
+
+export type PlayerSpecializationDto = {
+  player: AdminPlayerTargetDto;
+  tracks: SpecializationTrackDto[];
+  keystonesTotal: number;
+  keystonesMax: number;
 };
 
 export type ClusterDto = {

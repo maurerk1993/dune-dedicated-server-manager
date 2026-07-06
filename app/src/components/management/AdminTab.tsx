@@ -19,7 +19,10 @@ import type {
   CommandSpec,
   FieldSpec,
   HistoryDto,
+  ItemDto,
+  PlayerSpecializationDto,
   PublishResultDto,
+  SpecializationTrackDto,
 } from "../../types/management";
 import { formatTime } from "../../utils/formatting";
 import Combobox from "./Combobox";
@@ -79,6 +82,37 @@ function applyDefaults(spec: CommandSpec): Record<string, unknown> {
   return out;
 }
 
+function stringValue(value: unknown): string {
+  return typeof value === "string" ? value.trim() : value == null ? "" : String(value).trim();
+}
+
+function numberValue(value: unknown, fallback: number): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
+
+function clampInt(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, Math.round(value)));
+}
+
+function apiErrorMessage(err: unknown): string {
+  const raw = String(err);
+  const bodyStart = raw.indexOf("{");
+  if (bodyStart >= 0) {
+    try {
+      const obj = JSON.parse(raw.slice(bodyStart));
+      if (obj && typeof obj.error === "string") return obj.error;
+    } catch {
+      // fall through to raw
+    }
+  }
+  return raw;
+}
+
 export default function AdminTab({ tunnelId, prefill, onPrefillConsumed }: AdminTabProps) {
   const [commands, setCommands] = useState<CommandSpec[]>([]);
   const [selected, setSelected] = useState<CommandSpec | null>(null);
@@ -93,6 +127,7 @@ export default function AdminTab({ tunnelId, prefill, onPrefillConsumed }: Admin
   // Populated whenever values.ClassName changes so TemplateName renders as a
   // proper combobox of valid options instead of a free-text field.
   const [vehicleTemplates, setVehicleTemplates] = useState<string[]>([]);
+  const [selectedItem, setSelectedItem] = useState<ItemDto | null>(null);
 
   const refreshHistory = useCallback(async () => {
     try {
@@ -197,6 +232,35 @@ export default function AdminTab({ tunnelId, prefill, onPrefillConsumed }: Admin
     };
   }, [selected?.id, values.ClassName, tunnelId]);
 
+  useEffect(() => {
+    const itemId =
+      selected?.id === "AddItemToInventory" && typeof values.ItemName === "string"
+        ? values.ItemName.trim()
+        : "";
+    if (!itemId) {
+      setSelectedItem(null);
+      setValues((prev) => (prev.Quality ? { ...prev, Quality: 0 } : prev));
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const matches = await managementApi.searchItems(tunnelId, itemId, 10);
+        const hit = matches.find((item) => item.id === itemId) ?? null;
+        if (cancelled) return;
+        setSelectedItem(hit);
+        if (!hit?.gradeable) {
+          setValues((prev) => (prev.Quality ? { ...prev, Quality: 0 } : prev));
+        }
+      } catch {
+        if (!cancelled) setSelectedItem(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selected?.id, values.ItemName, tunnelId]);
+
   const grouped = useMemo(() => groupByCategory(commands), [commands]);
 
   const doPublish = useCallback(async () => {
@@ -205,11 +269,31 @@ export default function AdminTab({ tunnelId, prefill, onPrefillConsumed }: Admin
     setError(null);
     setResult(null);
     try {
-      const out = await managementApi.publish(tunnelId, selected.id, values);
+      let out: PublishResultDto;
+      if (selected.id === "AddItemToInventory" && numberValue(values.Quality, 0) > 0) {
+        const playerId = stringValue(values.PlayerId);
+        const itemId = stringValue(values.ItemName);
+        const quantity = numberValue(values.Quantity, 1);
+        const quality = numberValue(values.Quality, 0);
+        if (!playerId || playerId === "*") {
+          throw new Error("Custom-tier item grants require one specific offline player.");
+        }
+        if (!itemId) {
+          throw new Error("Pick an item before granting a custom tier.");
+        }
+        const matches = await managementApi.searchItems(tunnelId, itemId, 10);
+        const item = matches.find((row) => row.id === itemId);
+        if (!item?.gradeable) {
+          throw new Error("The selected item does not support quality tiers.");
+        }
+        out = await managementApi.grantQualityItem(tunnelId, playerId, itemId, quantity, quality);
+      } else {
+        out = await managementApi.publish(tunnelId, selected.id, values);
+      }
       setResult(out);
       await refreshHistory();
     } catch (err) {
-      setError(String(err));
+      setError(apiErrorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -268,54 +352,67 @@ export default function AdminTab({ tunnelId, prefill, onPrefillConsumed }: Admin
             <Text size="1" color="gray">
               {selected.describe}
             </Text>
-            <Flex direction="column" gap="3" mt="3">
-              {visibleFields(selected, values).map((field) => (
-                <FieldInput
-                  key={field.key}
-                  field={field}
-                  value={values[field.key]}
-                  onChange={(v) => setValues((prev) => ({ ...prev, [field.key]: v }))}
-                  tunnelId={tunnelId}
-                  vehicleTemplates={vehicleTemplates}
-                />
-              ))}
-            </Flex>
-            {selected.id === "SpawnVehicleAt" ? (
-              <UsePlayerPositionButton
-                tunnelId={tunnelId}
-                playerId={values.PlayerId as string | undefined}
-                onLocation={(loc) =>
-                  setValues((prev) => ({ ...prev, X: loc.x, Y: loc.y, Z: loc.z }))
-                }
-              />
-            ) : null}
-            <Flex mt="3" gap="2" align="center">
-              <Button onClick={publish} disabled={busy} color={selected.destructive ? "red" : undefined}>
-                {busy ? "Publishing…" : selected.destructive ? "Publish (destructive)" : "Publish"}
-              </Button>
-              {result ? (
-                <Badge color={result.ok ? "green" : "red"}>{result.ok ? "ok" : "failed"}</Badge>
-              ) : null}
-            </Flex>
-            {result && !result.ok && result.error ? (
-              <Text size="1" color="red" mt="2">
-                {result.error}
-              </Text>
-            ) : null}
-            {result?.output ? (
-              <Box
-                mt="2"
-                className="mono"
-                style={{ fontSize: 11, padding: 6, background: "var(--color-panel-translucent)", whiteSpace: "pre-wrap" }}
-              >
-                {result.output}
-              </Box>
-            ) : null}
-            {error ? (
-              <Text size="1" color="red" mt="2">
-                {error}
-              </Text>
-            ) : null}
+            {selected.id === "SpecializationLevelXp" ? (
+              <SpecializationLevelPanel tunnelId={tunnelId} onHistoryRefresh={refreshHistory} />
+            ) : (
+              <>
+                <Flex direction="column" gap="3" mt="3">
+                  {visibleFields(selected, values).map((field) => (
+                    <FieldInput
+                      key={field.key}
+                      field={field}
+                      value={values[field.key]}
+                      onChange={(v) => setValues((prev) => ({ ...prev, [field.key]: v }))}
+                      tunnelId={tunnelId}
+                      vehicleTemplates={vehicleTemplates}
+                    />
+                  ))}
+                  {selected.id === "AddItemToInventory" ? (
+                    <ItemQualityControl
+                      item={selectedItem}
+                      value={numberValue(values.Quality, 0)}
+                      onChange={(v) => setValues((prev) => ({ ...prev, Quality: v }))}
+                    />
+                  ) : null}
+                </Flex>
+                {selected.id === "SpawnVehicleAt" ? (
+                  <UsePlayerPositionButton
+                    tunnelId={tunnelId}
+                    playerId={values.PlayerId as string | undefined}
+                    onLocation={(loc) =>
+                      setValues((prev) => ({ ...prev, X: loc.x, Y: loc.y, Z: loc.z }))
+                    }
+                  />
+                ) : null}
+                <Flex mt="3" gap="2" align="center">
+                  <Button onClick={publish} disabled={busy} color={selected.destructive ? "red" : undefined}>
+                    {busy ? "Publishing..." : selected.destructive ? "Publish (destructive)" : "Publish"}
+                  </Button>
+                  {result ? (
+                    <Badge color={result.ok ? "green" : "red"}>{result.ok ? "ok" : "failed"}</Badge>
+                  ) : null}
+                </Flex>
+                {result && !result.ok && result.error ? (
+                  <Text size="1" color="red" mt="2">
+                    {result.error}
+                  </Text>
+                ) : null}
+                {result?.output ? (
+                  <Box
+                    mt="2"
+                    className="mono"
+                    style={{ fontSize: 11, padding: 6, background: "var(--color-panel-translucent)", whiteSpace: "pre-wrap" }}
+                  >
+                    {result.output}
+                  </Box>
+                ) : null}
+                {error ? (
+                  <Text size="1" color="red" mt="2">
+                    {error}
+                  </Text>
+                ) : null}
+              </>
+            )}
           </Box>
         ) : (
           <Text color="gray">Select a command on the left.</Text>
@@ -461,6 +558,281 @@ function UsePlayerPositionButton({
           {error}
         </Text>
       ) : null}
+    </Box>
+  );
+}
+
+function ItemQualityControl({
+  item,
+  value,
+  onChange,
+}: {
+  item: ItemDto | null;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  if (!item?.gradeable) return null;
+  const safeValue = clampInt(value, 0, 5);
+  return (
+    <Box>
+      <Flex justify="between" align="baseline" gap="2">
+        <Text size="2" weight="medium">
+          Tier - Mk1-Mk6 (0-5)
+        </Text>
+        <Badge color="amber">gradeable</Badge>
+      </Flex>
+      <Box mt="1">
+        <Select.Root value={String(safeValue)} onValueChange={(next) => onChange(Number(next))}>
+          <Select.Trigger />
+          <Select.Content>
+            <Select.Item value="0">0 - Mk1</Select.Item>
+            <Select.Item value="1">1 - Mk2</Select.Item>
+            <Select.Item value="2">2 - Mk3</Select.Item>
+            <Select.Item value="3">3 - Mk4</Select.Item>
+            <Select.Item value="4">4 - Mk5</Select.Item>
+            <Select.Item value="5">5 - Mk6</Select.Item>
+          </Select.Content>
+        </Select.Root>
+      </Box>
+      <Text size="1" color="gray" as="div" mt="1">
+        Tier 0 uses the normal grant path. Custom tiers require one offline player.
+      </Text>
+    </Box>
+  );
+}
+
+function SpecializationLevelPanel({
+  tunnelId,
+  onHistoryRefresh,
+}: {
+  tunnelId: string;
+  onHistoryRefresh: () => Promise<void>;
+}) {
+  const [playerId, setPlayerId] = useState("");
+  const [data, setData] = useState<PlayerSpecializationDto | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(false);
+  const [busyTrack, setBusyTrack] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<PublishResultDto | null>(null);
+
+  const refresh = useCallback(async () => {
+    const flsId = playerId.trim();
+    if (!flsId) {
+      setData(null);
+      setDrafts({});
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const next = await managementApi.specialization(tunnelId, flsId);
+      setData(next);
+      setDrafts(
+        Object.fromEntries(
+          next.tracks.map((track) => [
+            track.trackType,
+            clampInt(track.level, 0, Math.round(track.levelMax || 100)),
+          ]),
+        ),
+      );
+    } catch (err) {
+      setError(apiErrorMessage(err));
+      setData(null);
+      setDrafts({});
+    } finally {
+      setLoading(false);
+    }
+  }, [playerId, tunnelId]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const setLevel = useCallback(
+    async (track: SpecializationTrackDto) => {
+      const flsId = playerId.trim();
+      if (!flsId) return;
+      const level = clampInt(
+        drafts[track.trackType] ?? track.level,
+        0,
+        Math.round(track.levelMax || 100),
+      );
+      setBusyTrack(track.trackType);
+      setError(null);
+      setResult(null);
+      try {
+        const out = await managementApi.setSpecializationLevel(
+          tunnelId,
+          flsId,
+          track.trackType,
+          level,
+        );
+        setResult(out);
+        await refresh();
+        await onHistoryRefresh();
+      } catch (err) {
+        setError(apiErrorMessage(err));
+      } finally {
+        setBusyTrack(null);
+      }
+    },
+    [drafts, onHistoryRefresh, playerId, refresh, tunnelId],
+  );
+
+  const playerOnline = (data?.player.online || "").toLowerCase() === "online";
+
+  return (
+    <Box mt="3">
+      <Flex direction="column" gap="3">
+        <Box>
+          <Flex justify="between" align="baseline" gap="2">
+            <Text size="2" weight="medium">
+              Player
+            </Text>
+            {data ? (
+              <Badge color={playerOnline ? "green" : "gray"}>{data.player.online || "offline"}</Badge>
+            ) : null}
+          </Flex>
+          <Box mt="1">
+            <CommandCombobox
+              kind="players"
+              value={playerId}
+              onPick={(value) => {
+                setPlayerId(stringValue(value));
+                setResult(null);
+                setError(null);
+              }}
+              tunnelId={tunnelId}
+            />
+          </Box>
+        </Box>
+
+        <Flex gap="2" align="center" wrap="wrap">
+          <Button size="1" variant="soft" disabled={!playerId || loading} onClick={() => void refresh()}>
+            {loading ? "Refreshing..." : "Refresh"}
+          </Button>
+          {data ? (
+            <Text size="1" color="gray">
+              Keystones: {data.keystonesTotal} / {data.keystonesMax}
+            </Text>
+          ) : null}
+        </Flex>
+
+        {data ? (
+          <Flex direction="column" gap="2">
+            {data.tracks.map((track) => (
+              <SpecializationTrackRow
+                key={track.trackType}
+                track={track}
+                draft={drafts[track.trackType] ?? clampInt(track.level, 0, Math.round(track.levelMax || 100))}
+                disabled={playerOnline || loading || busyTrack !== null}
+                busy={busyTrack === track.trackType}
+                onDraft={(level) =>
+                  setDrafts((prev) => ({
+                    ...prev,
+                    [track.trackType]: clampInt(level, 0, Math.round(track.levelMax || 100)),
+                  }))
+                }
+                onSet={() => void setLevel(track)}
+              />
+            ))}
+          </Flex>
+        ) : (
+          <Text size="2" color="gray">
+            Pick a player to load specialization levels.
+          </Text>
+        )}
+
+        {playerOnline ? (
+          <Text size="1" color="amber">
+            This player is online. Level edits are disabled until they fully log out.
+          </Text>
+        ) : null}
+        {result?.output ? (
+          <Box
+            className="mono"
+            style={{ fontSize: 11, padding: 6, background: "var(--color-panel-translucent)", whiteSpace: "pre-wrap" }}
+          >
+            {result.output}
+          </Box>
+        ) : null}
+        {result && !result.ok && result.error ? (
+          <Text size="1" color="red">
+            {result.error}
+          </Text>
+        ) : null}
+        {error ? (
+          <Text size="1" color="red">
+            {error}
+          </Text>
+        ) : null}
+      </Flex>
+    </Box>
+  );
+}
+
+function SpecializationTrackRow({
+  track,
+  draft,
+  disabled,
+  busy,
+  onDraft,
+  onSet,
+}: {
+  track: SpecializationTrackDto;
+  draft: number;
+  disabled: boolean;
+  busy: boolean;
+  onDraft: (level: number) => void;
+  onSet: () => void;
+}) {
+  const maxLevel = Math.round(track.levelMax || 100);
+  const safeDraft = clampInt(draft, 0, maxLevel);
+  return (
+    <Box
+      style={{
+        border: "1px solid var(--gray-a6)",
+        borderRadius: 8,
+        padding: 12,
+        background: "var(--color-panel-translucent)",
+      }}
+    >
+      <Flex align="center" gap="3" wrap="wrap">
+        <Box style={{ flex: "1 1 150px", minWidth: 0 }}>
+          <Text size="2" weight="bold" as="div">
+            {track.trackType}
+          </Text>
+          <Text size="1" color="gray" className="mono">
+            Lv {Math.round(track.level)} / {maxLevel} - {track.xp.toLocaleString()} /{" "}
+            {track.xpMax.toLocaleString()} xp
+          </Text>
+        </Box>
+        <Box style={{ flex: "2 1 260px", minWidth: 180 }}>
+          <input
+            type="range"
+            min={0}
+            max={maxLevel}
+            value={safeDraft}
+            disabled={disabled}
+            onChange={(event) => onDraft(Number(event.target.value))}
+            style={{ width: "100%" }}
+          />
+        </Box>
+        <Box style={{ flex: "0 0 86px" }}>
+          <TextField.Root
+            type="number"
+            min={0}
+            max={maxLevel}
+            value={String(safeDraft)}
+            disabled={disabled}
+            onChange={(event) => onDraft(Number(event.target.value))}
+          />
+        </Box>
+        <Button size="1" disabled={disabled || busy} onClick={onSet}>
+          {busy ? "Setting..." : "Set"}
+        </Button>
+      </Flex>
     </Box>
   );
 }
@@ -779,7 +1151,7 @@ function CommandCombobox({
             <Text size="2">{p.name || "(unnamed)"}</Text>
             <Text size="1" color="gray" as="div" className="mono">{p.flsId}</Text>
           </Box>
-          <Badge color={p.online === "online" ? "green" : "gray"}>{p.online || "offline"}</Badge>
+          <Badge color={String(p.online || "").toLowerCase() === "online" ? "green" : "gray"}>{p.online || "offline"}</Badge>
         </Flex>
       )}
       placeholder="Pick a player…"
