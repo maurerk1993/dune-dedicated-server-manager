@@ -5,7 +5,7 @@ import { Button, Dialog, Flex, IconButton, Link, Text } from "@radix-ui/themes";
 
 import { openExternal } from "../../services/tauri";
 
-const REPO_URL = "https://github.com/adainrivers/dune-dedicated-server-manager";
+const REPO_URL = "https://github.com/maurerk1993/dune-dedicated-server-manager";
 const ISSUES_URL = `${REPO_URL}/issues`;
 
 /**

@@ -48,11 +48,17 @@ typical dedicated-server deployment uses:
 - TCP 31982 for RMQ
 
 If you found a bug or are having other issues, please create an issue here:
-https://github.com/adainrivers/dune-dedicated-server-manager/issues
+https://github.com/maurerk1993/dune-dedicated-server-manager/issues
 
 ## Building From Source
 
 See [Building From Source](docs/building-from-source.md).
+
+## Maintaining This Fork
+
+See [Owning and Releasing This Fork](docs/owning-and-releasing-this-fork.md)
+for the private-fork workflow, updater signing setup, and installer release
+process.
 
 ## License
 
