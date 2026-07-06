@@ -317,5 +317,12 @@ mod tests {
         let item = find_item("T6_Augment_Acuracy1").expect("known gradeable item");
         assert!(item.gradeable);
         assert_eq!(item.tier, Some(6));
+        assert_eq!(item.stack_max, Some(1));
+    }
+
+    #[test]
+    fn stackable_catalog_metadata_loads() {
+        let item = find_item("AluminiumBar").expect("known stackable item");
+        assert_eq!(item.stack_max, Some(500));
     }
 }

@@ -253,23 +253,14 @@ pub async fn grant_quality_item(
             "itemId must be a template class name, not a numeric id",
         ));
     }
-    let quantity = req.quantity.clamp(1, 10_000);
-    if !(1..=5).contains(&req.quality) {
-        return Err(ApiError::bad_request(
-            "quality must be 1..=5 for custom-tier item grants",
-        ));
-    }
+    let quantity = validate_custom_tier_grant_quantity(req.quantity)?;
+    validate_custom_tier_grant_quality(req.quality)?;
     let Some(item) = data::find_item(item_id) else {
         return Err(ApiError::bad_request(format!(
             "item {item_id} was not found in the catalog"
         )));
     };
-    if !item.gradeable {
-        return Err(ApiError::bad_request(format!(
-            "{} does not support item quality tiers",
-            item.name
-        )));
-    }
+    ensure_custom_tier_item_gradeable(&item)?;
 
     let cluster = state.env.cluster.get().await?;
     let Some(player) =
@@ -285,9 +276,12 @@ pub async fn grant_quality_item(
         )));
     }
 
-    let Some(backpack) =
-        crate::postgres::resolve_account_backpack(&state.env.pg, &cluster.namespace, player.account_id)
-            .await?
+    let Some(backpack) = crate::postgres::resolve_account_backpack(
+        &state.env.pg,
+        &cluster.namespace,
+        player.account_id,
+    )
+    .await?
     else {
         return Err(ApiError::not_found(format!(
             "no backpack inventory found for {}",
@@ -305,17 +299,14 @@ pub async fn grant_quality_item(
         "quantity": quantity,
         "quality": req.quality,
     });
-    let grant = crate::postgres::BackpackGrantItem {
-        template_id: item.id.clone(),
-        quantity,
-        stats_json: crate::postgres::grant_item_stats_json(item.stack_max).to_string(),
-        quality_level: req.quality,
-    };
-    let result = crate::postgres::insert_items_to_backpack(
+    let result = crate::postgres::grant_quality_items_to_backpack(
         &state.env.pg,
         &cluster.namespace,
         backpack.inventory_id,
-        &[grant],
+        &item.id,
+        quantity,
+        req.quality,
+        item.stack_max,
     )
     .await;
 
@@ -362,6 +353,35 @@ pub async fn grant_quality_item(
         "error": error,
         "inner": inner,
     })))
+}
+
+fn validate_custom_tier_grant_quantity(quantity: i64) -> Result<i64, ApiError> {
+    if !(1..=crate::postgres::MAX_QUALITY_GRANT_QUANTITY).contains(&quantity) {
+        return Err(ApiError::bad_request(format!(
+            "quantity must be 1..={} for custom-tier item grants",
+            crate::postgres::MAX_QUALITY_GRANT_QUANTITY
+        )));
+    }
+    Ok(quantity)
+}
+
+fn validate_custom_tier_grant_quality(quality: i64) -> Result<i64, ApiError> {
+    if !(1..=5).contains(&quality) {
+        return Err(ApiError::bad_request(
+            "quality must be 1..=5 for custom-tier item grants",
+        ));
+    }
+    Ok(quality)
+}
+
+fn ensure_custom_tier_item_gradeable(item: &data::Item) -> Result<(), ApiError> {
+    if !item.gradeable {
+        return Err(ApiError::bad_request(format!(
+            "{} does not support item quality tiers",
+            item.name
+        )));
+    }
+    Ok(())
 }
 
 pub async fn cluster(State(state): State<AppState>) -> Result<impl IntoResponse, ApiError> {
@@ -534,4 +554,55 @@ pub async fn publish(
         "error": error,
         "inner": inner,
     })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::StatusCode;
+
+    #[test]
+    fn custom_tier_grant_quantity_validation_rejects_out_of_range_values() {
+        assert_eq!(validate_custom_tier_grant_quantity(1).unwrap(), 1);
+        assert_eq!(
+            validate_custom_tier_grant_quantity(crate::postgres::MAX_QUALITY_GRANT_QUANTITY)
+                .unwrap(),
+            crate::postgres::MAX_QUALITY_GRANT_QUANTITY
+        );
+
+        let low = validate_custom_tier_grant_quantity(0).unwrap_err();
+        assert_eq!(low.status, StatusCode::BAD_REQUEST);
+        assert!(low.message.contains("quantity must be 1..="));
+
+        let high =
+            validate_custom_tier_grant_quantity(crate::postgres::MAX_QUALITY_GRANT_QUANTITY + 1)
+                .unwrap_err();
+        assert_eq!(high.status, StatusCode::BAD_REQUEST);
+        assert!(high.message.contains("quantity must be 1..="));
+    }
+
+    #[test]
+    fn custom_tier_grant_quality_validation_rejects_out_of_range_values() {
+        assert_eq!(validate_custom_tier_grant_quality(1).unwrap(), 1);
+        assert_eq!(validate_custom_tier_grant_quality(5).unwrap(), 5);
+
+        let low = validate_custom_tier_grant_quality(0).unwrap_err();
+        assert_eq!(low.status, StatusCode::BAD_REQUEST);
+        assert!(low.message.contains("quality must be 1..=5"));
+
+        let high = validate_custom_tier_grant_quality(6).unwrap_err();
+        assert_eq!(high.status, StatusCode::BAD_REQUEST);
+        assert!(high.message.contains("quality must be 1..=5"));
+    }
+
+    #[test]
+    fn custom_tier_grant_blocks_non_gradeable_items() {
+        let gradeable = data::find_item("T6_Augment_Acuracy1").expect("known gradeable item");
+        ensure_custom_tier_item_gradeable(&gradeable).unwrap();
+
+        let plain = data::find_item("AluminiumBar").expect("known non-gradeable item");
+        let err = ensure_custom_tier_item_gradeable(&plain).unwrap_err();
+        assert_eq!(err.status, StatusCode::BAD_REQUEST);
+        assert!(err.message.contains("does not support item quality tiers"));
+    }
 }

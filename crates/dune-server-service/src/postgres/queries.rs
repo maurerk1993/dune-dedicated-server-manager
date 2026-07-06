@@ -123,6 +123,20 @@ pub struct BackpackGrantItem {
     pub quality_level: i64,
 }
 
+pub const MAX_QUALITY_GRANT_QUANTITY: i64 = 10_000;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QualityGrantStackUpdate {
+    pub item_id: i64,
+    pub add_quantity: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QualityGrantPlan {
+    pub updates: Vec<QualityGrantStackUpdate>,
+    pub insert_stack_sizes: Vec<i64>,
+}
+
 const PLAYER_STATE_COLUMN_SQL: &str = "
 SELECT column_name
 FROM information_schema.columns
@@ -191,6 +205,24 @@ VALUES (
 RETURNING id::int8
 ";
 
+const QUALITY_BACKPACK_STACKS_SQL: &str = "
+SELECT i.id::int8 AS item_id, COALESCE(i.stack_size, 0)::int8 AS stack_size
+FROM dune.items i
+WHERE i.inventory_id = $1::int8
+  AND i.template_id = $2::text
+  AND COALESCE(i.quality_level, 0)::int8 = $3::int8
+  AND COALESCE(i.stack_size, 0)::int8 < $4::int8
+ORDER BY i.position_index ASC, i.id ASC
+FOR UPDATE
+";
+
+const QUALITY_BACKPACK_UPDATE_STACK_SQL: &str = "
+UPDATE dune.items
+SET stack_size = COALESCE(stack_size, 0)::int8 + $2::int8
+WHERE id = $1::int8
+RETURNING id::int8
+";
+
 const ADMIN_PLAYER_TARGET_SQL: &str = "
 SELECT
     COALESCE(enc.\"user\"::text, '') AS fls_id,
@@ -222,7 +254,7 @@ WHERE player_id = $1::int8
 const SET_SPECIALIZATION_LEVEL_SQL: &str = "
 SELECT dune.set_specialization_xp_and_level(
     $1::int8,
-    $2::dune.specializationtracktype,
+    $2::text::dune.specializationtracktype,
     $3::int4,
     $4::real
 )
@@ -605,11 +637,174 @@ pub async fn insert_items_to_backpack(
     Ok(inserted_ids)
 }
 
+pub fn plan_quality_item_grant(
+    existing_stacks: &[(i64, i64)],
+    stack_max: Option<u32>,
+    quantity: i64,
+) -> Result<QualityGrantPlan> {
+    if !(1..=MAX_QUALITY_GRANT_QUANTITY).contains(&quantity) {
+        return Err(anyhow!(
+            "quantity must be 1..={MAX_QUALITY_GRANT_QUANTITY}"
+        ));
+    }
+
+    let Some(max_stack_size) = quality_grant_stack_max(stack_max) else {
+        return Ok(QualityGrantPlan {
+            updates: Vec::new(),
+            insert_stack_sizes: vec![1; quantity as usize],
+        });
+    };
+
+    let mut remaining = quantity;
+    let mut updates = Vec::new();
+    for (item_id, stack_size) in existing_stacks {
+        if remaining == 0 {
+            break;
+        }
+        let available = max_stack_size.saturating_sub(*stack_size);
+        if available <= 0 {
+            continue;
+        }
+        let add_quantity = remaining.min(available);
+        updates.push(QualityGrantStackUpdate {
+            item_id: *item_id,
+            add_quantity,
+        });
+        remaining -= add_quantity;
+    }
+
+    let mut insert_stack_sizes = Vec::new();
+    while remaining > 0 {
+        let insert_quantity = remaining.min(max_stack_size);
+        insert_stack_sizes.push(insert_quantity);
+        remaining -= insert_quantity;
+    }
+
+    Ok(QualityGrantPlan {
+        updates,
+        insert_stack_sizes,
+    })
+}
+
+pub async fn grant_quality_items_to_backpack(
+    pg: &PgClient,
+    namespace: &str,
+    inventory_id: i64,
+    template_id: &str,
+    quantity: i64,
+    quality_level: i64,
+    stack_max: Option<u32>,
+) -> Result<Vec<i64>> {
+    if template_id.trim().is_empty() {
+        return Err(anyhow!("template_id must not be empty"));
+    }
+    if !(1..=5).contains(&quality_level) {
+        return Err(anyhow!("quality_level must be 1..=5"));
+    }
+
+    let mut state = pg.dedicated_client(namespace).await?;
+    let tx = state
+        .client_mut()
+        .transaction()
+        .await
+        .context("starting custom-tier item grant transaction")?;
+
+    let existing_stacks = if let Some(max_stack_size) = quality_grant_stack_max(stack_max) {
+        tx.query(
+            QUALITY_BACKPACK_STACKS_SQL,
+            &[&inventory_id, &template_id, &quality_level, &max_stack_size],
+        )
+        .await
+        .context("locking matching backpack item stacks")?
+        .into_iter()
+        .map(|row| {
+            (
+                row.try_get::<_, i64>(0).unwrap_or_default(),
+                row.try_get::<_, i64>(1).unwrap_or_default(),
+            )
+        })
+        .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+
+    let plan = plan_quality_item_grant(&existing_stacks, stack_max, quantity)?;
+    let slot_limit = plan.insert_stack_sizes.len() as i64;
+    let slot_rows = if slot_limit > 0 {
+        let rows = tx
+            .query(PLAYER_BACKPACK_FREE_SLOTS_SQL, &[&inventory_id, &slot_limit])
+            .await
+            .context("finding free backpack slots")?;
+        if rows.len() != plan.insert_stack_sizes.len() {
+            return Err(anyhow!(
+                "not enough free backpack slots: needed {}, found {}",
+                plan.insert_stack_sizes.len(),
+                rows.len()
+            ));
+        }
+        rows
+    } else {
+        Vec::new()
+    };
+
+    let update = tx
+        .prepare(QUALITY_BACKPACK_UPDATE_STACK_SQL)
+        .await
+        .context("preparing backpack stack update")?;
+    let insert = tx
+        .prepare(PLAYER_BACKPACK_INSERT_ITEM_SQL)
+        .await
+        .context("preparing backpack item insert")?;
+    let stats_json = grant_item_stats_json(stack_max).to_string();
+    let mut affected_ids = Vec::with_capacity(plan.updates.len() + plan.insert_stack_sizes.len());
+
+    for stack_update in &plan.updates {
+        let row = tx
+            .query_one(
+                &update,
+                &[&stack_update.item_id, &stack_update.add_quantity],
+            )
+            .await
+            .with_context(|| format!("updating backpack item stack {}", stack_update.item_id))?;
+        affected_ids.push(row.try_get::<_, i64>(0).unwrap_or_default());
+    }
+
+    for (stack_size, slot) in plan.insert_stack_sizes.iter().zip(slot_rows.iter()) {
+        let position_index = slot.try_get::<_, i64>(0).unwrap_or_default();
+        let row = tx
+            .query_one(
+                &insert,
+                &[
+                    &inventory_id,
+                    stack_size,
+                    &position_index,
+                    &template_id,
+                    &stats_json,
+                    &quality_level,
+                ],
+            )
+            .await
+            .with_context(|| format!("inserting custom-tier backpack item {template_id}"))?;
+        affected_ids.push(row.try_get::<_, i64>(0).unwrap_or_default());
+    }
+
+    tx.commit()
+        .await
+        .context("committing custom-tier item grant transaction")?;
+    Ok(affected_ids)
+}
+
 pub fn grant_item_stats_json(stack_max: Option<u32>) -> &'static str {
     if stack_max.unwrap_or_default() > 1 {
         return r#"{"FItemStackAndDurabilityStats":[[],{"DecayedMaxDurability":0.0}]}"#;
     }
     r#"{"FCustomizationStats":[[],{}],"FItemStackAndDurabilityStats":[[],{}]}"#
+}
+
+fn quality_grant_stack_max(stack_max: Option<u32>) -> Option<i64> {
+    stack_max
+        .map(i64::from)
+        .filter(|max_stack_size| *max_stack_size > 1)
 }
 
 pub async fn resolve_chat_player(
@@ -678,10 +873,65 @@ mod tests {
     }
 
     #[test]
+    fn specialization_set_query_binds_track_as_text_before_enum_cast() {
+        assert!(SET_SPECIALIZATION_LEVEL_SQL.contains("$2::text::dune.specializationtracktype"));
+    }
+
+    #[test]
     fn grant_item_stats_follow_stack_shape() {
         assert!(grant_item_stats_json(Some(500)).contains("DecayedMaxDurability"));
         assert!(grant_item_stats_json(Some(1)).contains("FCustomizationStats"));
         assert!(grant_item_stats_json(None).contains("FCustomizationStats"));
+    }
+
+    #[test]
+    fn quality_grant_treats_unknown_stack_max_as_non_stackable() {
+        let plan = plan_quality_item_grant(&[(100, 1)], None, 3).unwrap();
+        assert!(plan.updates.is_empty());
+        assert_eq!(plan.insert_stack_sizes, vec![1, 1, 1]);
+    }
+
+    #[test]
+    fn quality_grant_treats_single_stack_max_as_non_stackable() {
+        let plan = plan_quality_item_grant(&[(100, 1)], Some(1), 2).unwrap();
+        assert!(plan.updates.is_empty());
+        assert_eq!(plan.insert_stack_sizes, vec![1, 1]);
+    }
+
+    #[test]
+    fn quality_grant_fills_matching_existing_stacks_before_inserts() {
+        let plan = plan_quality_item_grant(&[(10, 18), (11, 5)], Some(20), 25).unwrap();
+        assert_eq!(
+            plan.updates,
+            vec![
+                QualityGrantStackUpdate {
+                    item_id: 10,
+                    add_quantity: 2,
+                },
+                QualityGrantStackUpdate {
+                    item_id: 11,
+                    add_quantity: 15,
+                },
+            ]
+        );
+        assert_eq!(plan.insert_stack_sizes, vec![8]);
+    }
+
+    #[test]
+    fn quality_grant_splits_new_stackable_rows_by_stack_max() {
+        let plan = plan_quality_item_grant(&[], Some(20), 45).unwrap();
+        assert!(plan.updates.is_empty());
+        assert_eq!(plan.insert_stack_sizes, vec![20, 20, 5]);
+    }
+
+    #[test]
+    fn quality_grant_rejects_invalid_quantity() {
+        let err = plan_quality_item_grant(&[], Some(20), 0).unwrap_err();
+        assert!(err.to_string().contains("quantity must be 1..="));
+
+        let err =
+            plan_quality_item_grant(&[], Some(20), MAX_QUALITY_GRANT_QUANTITY + 1).unwrap_err();
+        assert!(err.to_string().contains("quantity must be 1..="));
     }
 
     #[test]

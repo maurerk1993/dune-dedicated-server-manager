@@ -11,5 +11,5 @@ License text: `licenses/DST_Custom-Apache-2.0.txt`
 
 The adapted pieces are limited to Dune admin-management behavior for
 specialization level writes, offline custom-quality item grants, and item
-catalog gradeability metadata. The project license remains unchanged for this
-repository's original code.
+catalog gradeability and stackability metadata. The project license remains
+unchanged for this repository's original code.
