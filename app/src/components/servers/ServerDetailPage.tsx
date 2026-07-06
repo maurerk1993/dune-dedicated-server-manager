@@ -8,11 +8,12 @@ import type {
 } from "../../types/server";
 import type { LogRow } from "../../types/log";
 import type { CustomTunnelStartRequest, ServerTunnelStartRequest, ServerTunnelStatus } from "../../types/tunnel";
-import type { ServerSubPage } from "../../types/ui";
+import type { ServerAutoRefreshInterval, ServerSubPage } from "../../types/ui";
 import { isManagementSubPage } from "../../types/ui";
 import { remoteServerDefaultUser, resolveServerStatus } from "../../utils/remote-server";
 import ActionButton from "../ui/ActionButton";
 import StatusPill from "../ui/StatusPill";
+import ServerAutoRefreshControl from "./ServerAutoRefreshControl";
 import ServerDashboard from "./ServerDashboard";
 import ServerPods from "./ServerPods";
 import ServerUpdatePanel from "./ServerUpdatePanel";
@@ -36,7 +37,11 @@ export type ServerDetailPageProps = {
   componentRestartBusy: Record<string, boolean>;
   tunnels: Record<string, ServerTunnelStatus>;
   tunnelBusy: Record<string, boolean>;
+  autoRefreshEnabled: boolean;
+  autoRefreshIntervalSeconds: ServerAutoRefreshInterval;
   onRefresh: () => void;
+  onToggleAutoRefresh: () => void;
+  onAutoRefreshIntervalChange: (intervalSeconds: ServerAutoRefreshInterval) => void;
   onRemove: () => void;
   onStartBattlegroup: () => void;
   onStopBattlegroup: () => void;
@@ -65,7 +70,11 @@ export default function ServerDetailPage(props: ServerDetailPageProps) {
     componentRestartBusy,
     tunnels,
     tunnelBusy,
+    autoRefreshEnabled,
+    autoRefreshIntervalSeconds,
     onRefresh,
+    onToggleAutoRefresh,
+    onAutoRefreshIntervalChange,
     onRemove,
     onStartBattlegroup,
     onStopBattlegroup,
@@ -126,6 +135,12 @@ export default function ServerDetailPage(props: ServerDetailPageProps) {
             <ActionButton onClick={onRefresh} busy={busy} pendingLabel="Refreshing">
               Refresh
             </ActionButton>
+            <ServerAutoRefreshControl
+              enabled={autoRefreshEnabled}
+              intervalSeconds={autoRefreshIntervalSeconds}
+              onToggle={onToggleAutoRefresh}
+              onIntervalChange={onAutoRefreshIntervalChange}
+            />
             <ActionButton onClick={onRemove} tone="danger" disabled={busy}>
               Forget
             </ActionButton>

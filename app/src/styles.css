@@ -895,6 +895,45 @@ body {
   }
 }
 
+.auto-refresh-split {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.auto-refresh-main {
+  min-width: 82px;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.auto-refresh-menu {
+  width: 32px;
+  min-width: 32px;
+  padding-inline: 0;
+  border-left: 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.auto-refresh-menu svg {
+  width: 14px;
+  height: 14px;
+}
+
+.auto-refresh-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 96px;
+}
+
+.auto-refresh-check-placeholder {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
 /* Inline spinner used inside ActionButton */
 .inline-spinner {
   width: 12px;

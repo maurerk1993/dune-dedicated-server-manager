@@ -1,11 +1,26 @@
 import type { RemoteServerRecord } from "../types/server";
 import type { CustomTunnelDef } from "../types/tunnel";
-import type { ActivePage, ServerSubPage } from "../types/ui";
-import { SERVER_SUB_PAGES } from "../types/ui";
+import type {
+  ActivePage,
+  ServerAutoRefreshInterval,
+  ServerSubPage,
+} from "../types/ui";
+import { SERVER_AUTO_REFRESH_INTERVALS, SERVER_SUB_PAGES } from "../types/ui";
 
 const remoteServersStorageKey = "dune-manager.remote-servers";
 const activePageStorageKey = "dune-manager.active-page";
 const logSidebarStorageKey = "dune-manager.log-sidebar";
+const serverAutoRefreshStorageKey = "dune-manager.server-auto-refresh";
+
+export type ServerAutoRefreshPrefs = {
+  enabled: boolean;
+  intervalSeconds: ServerAutoRefreshInterval;
+};
+
+export const defaultServerAutoRefreshPrefs: ServerAutoRefreshPrefs = {
+  enabled: false,
+  intervalSeconds: 30,
+};
 
 export function isRemoteServerRecord(value: unknown): value is RemoteServerRecord {
   if (!value || typeof value !== "object") return false;
@@ -54,6 +69,40 @@ export function upsertRemoteServer(
   server: RemoteServerRecord,
 ): RemoteServerRecord[] {
   return mergeRemoteServers(servers, [server]);
+}
+
+function isServerAutoRefreshInterval(value: unknown): value is ServerAutoRefreshInterval {
+  return (
+    typeof value === "number" &&
+    (SERVER_AUTO_REFRESH_INTERVALS as readonly number[]).includes(value)
+  );
+}
+
+export function readServerAutoRefreshPrefs(): ServerAutoRefreshPrefs {
+  const text = window.localStorage.getItem(serverAutoRefreshStorageKey);
+  if (!text) return { ...defaultServerAutoRefreshPrefs };
+  try {
+    const parsed = JSON.parse(text) as Partial<ServerAutoRefreshPrefs> | null;
+    return {
+      enabled: typeof parsed?.enabled === "boolean" ? parsed.enabled : false,
+      intervalSeconds: isServerAutoRefreshInterval(parsed?.intervalSeconds)
+        ? parsed.intervalSeconds
+        : defaultServerAutoRefreshPrefs.intervalSeconds,
+    };
+  } catch {
+    window.localStorage.removeItem(serverAutoRefreshStorageKey);
+    return { ...defaultServerAutoRefreshPrefs };
+  }
+}
+
+export function writeServerAutoRefreshPrefs(state: ServerAutoRefreshPrefs): void {
+  window.localStorage.setItem(
+    serverAutoRefreshStorageKey,
+    JSON.stringify({
+      enabled: state.enabled,
+      intervalSeconds: state.intervalSeconds,
+    }),
+  );
 }
 
 type PersistedActivePage = { activeServerId?: string; activeSub?: ServerSubPage };

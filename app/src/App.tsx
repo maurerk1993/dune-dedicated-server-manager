@@ -13,6 +13,7 @@ import { useComponentActions } from "./hooks/useComponentActions";
 import { useOperationLogs } from "./hooks/useOperationLogs";
 import { useRemoteServerStatus } from "./hooks/useRemoteServerStatus";
 import { useRemoteServers } from "./hooks/useRemoteServers";
+import { useServerAutoRefresh } from "./hooks/useServerAutoRefresh";
 import { useServerTunnels } from "./hooks/useServerTunnels";
 import { useActivePage } from "./hooks/useActivePage";
 import { log } from "./utils/logging";
@@ -70,6 +71,12 @@ export function App() {
       ? remoteServersHook.remoteServers.find((server) => server.id === activePage.serverId)
       : undefined;
 
+  const autoRefresh = useServerAutoRefresh({
+    activeServer,
+    busyMap: status.remoteServerBusy,
+    onRefreshServer: status.refreshRemoteServerStatus,
+  });
+
   return (
     <Theme
       appearance="dark"
@@ -121,7 +128,11 @@ export function App() {
                   componentRestartBusy={status.remoteComponentRestartBusy}
                   tunnels={tunnels.serverTunnels}
                   tunnelBusy={tunnels.serverTunnelBusy}
+                  autoRefreshEnabled={autoRefresh.autoRefreshEnabled}
+                  autoRefreshIntervalSeconds={autoRefresh.autoRefreshIntervalSeconds}
                   onRefresh={() => status.refreshRemoteServerStatus(activeServer)}
+                  onToggleAutoRefresh={autoRefresh.toggleAutoRefresh}
+                  onAutoRefreshIntervalChange={autoRefresh.setAutoRefreshInterval}
                   onRemove={() => remoteServersHook.setRemoteServerToRemove(activeServer)}
                   onStartBattlegroup={() => status.runRemoteBattlegroupAction(activeServer, "start")}
                   onStopBattlegroup={() => status.runRemoteBattlegroupAction(activeServer, "stop")}
