@@ -37,7 +37,22 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: app
-        run: npm ci
+        shell: pwsh
+        run: |
+          npm config set fetch-retries 5
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retry-maxtimeout 120000
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            npm ci --no-audit --fund=false
+            if ($LASTEXITCODE -eq 0) {
+              exit 0
+            }
+            if ($attempt -eq 3) {
+              exit $LASTEXITCODE
+            }
+            Write-Warning "npm ci failed on attempt $attempt; retrying after a short delay."
+            Start-Sleep -Seconds (15 * $attempt)
+          }
 
       - name: Rust format
         run: cargo fmt --all -- --check
