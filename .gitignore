@@ -28,6 +28,7 @@ pnpm-debug.log*
 # Docs are scratch notes for now; keep README trackable later
 *.md
 !README.md
+!AGENTS.md
 !docs/
 !docs/*.md
 docs/rabbitmq-protocol.md
