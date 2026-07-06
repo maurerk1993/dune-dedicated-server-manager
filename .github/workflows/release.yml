@@ -112,12 +112,6 @@ jobs:
           - name: Linux
             platform: ubuntu-22.04
             args: --bundles appimage,deb
-          - name: macOS Apple Silicon
-            platform: macos-latest
-            args: --target aarch64-apple-darwin --bundles dmg
-          - name: macOS Intel
-            platform: macos-latest
-            args: --target x86_64-apple-darwin --bundles dmg
 
     steps:
       - name: Checkout
@@ -125,8 +119,6 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ startsWith(matrix.name, 'macOS') && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Install Node
         uses: actions/setup-node@v4
