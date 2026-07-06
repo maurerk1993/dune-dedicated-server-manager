@@ -844,9 +844,17 @@ function ItemCatalogPanel({ tunnelId }: { tunnelId: string }) {
             <Button onClick={() => void applyCatalog()} disabled={applyDisabled}>
               {busy === "apply" ? "Applying..." : "Apply approved catalog"}
             </Button>
-            <Text size="1" color="gray">
-              Source: {diff.sourceUrl || "unknown"} · hash {shortHash(diff.candidate.catalogHash)}
-            </Text>
+            <Flex gap="1" align="center" wrap="wrap" style={{ minWidth: 0 }}>
+              <Text size="1" color="gray">
+                Source:
+              </Text>
+              <Badge color="gray" title={diff.sourceUrl || undefined}>
+                {catalogSourceLabel(diff.sourceUrl)}
+              </Badge>
+              <Badge color="gray" className="mono">
+                {shortHash(diff.candidate.catalogHash)}
+              </Badge>
+            </Flex>
           </Flex>
         </Box>
       ) : null}
@@ -1043,6 +1051,19 @@ function firstNonEmptyTab(diff: ItemCatalogDiffDto): CatalogReviewTab {
 function shortHash(hash: string | null | undefined): string {
   if (!hash) return "unknown";
   return hash.length > 10 ? hash.slice(0, 10) : hash;
+}
+
+function catalogSourceLabel(sourceUrl: string | null | undefined): string {
+  if (!sourceUrl) return "unknown";
+  try {
+    const url = new URL(sourceUrl);
+    const file = url.pathname.split("/").filter(Boolean).pop() || "catalog";
+    if (url.hostname.includes("githubusercontent.com")) return `GitHub asset: ${file}`;
+    if (url.hostname === "github.com") return file;
+    return `${url.hostname}: ${file}`;
+  } catch {
+    return sourceUrl.length > 32 ? `${sourceUrl.slice(0, 29)}...` : sourceUrl;
+  }
 }
 
 function SpecializationLevelPanel({
