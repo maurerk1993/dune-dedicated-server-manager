@@ -341,7 +341,7 @@ pub async fn grant_quality_item(
     };
     if crate::postgres::is_player_online(&player.online) {
         return Err(ApiError::bad_request(format!(
-            "{} is currently online. Custom-tier item grants are offline-only; have the player fully log out first.",
+            "{} is currently online. Graded item grants are offline-only; have the player fully log out first.",
             player.name
         )));
     }
@@ -396,7 +396,7 @@ pub async fn grant_quality_item(
             (
                 true,
                 format!(
-                    "Gave {} x {} at quality {} to {}. Player must fully relog before this appears in-game.",
+                    "Gave {} x {} at Grade {} to {}. Player must fully relog before this appears in-game.",
                     quantity, item.name, req.quality, player.name
                 ),
                 None,
@@ -428,7 +428,7 @@ pub async fn grant_quality_item(
 fn validate_custom_tier_grant_quantity(quantity: i64) -> Result<i64, ApiError> {
     if !(1..=crate::postgres::MAX_QUALITY_GRANT_QUANTITY).contains(&quantity) {
         return Err(ApiError::bad_request(format!(
-            "quantity must be 1..={} for custom-tier item grants",
+            "quantity must be 1..={} for graded item grants",
             crate::postgres::MAX_QUALITY_GRANT_QUANTITY
         )));
     }
@@ -438,7 +438,7 @@ fn validate_custom_tier_grant_quantity(quantity: i64) -> Result<i64, ApiError> {
 fn validate_custom_tier_grant_quality(quality: i64) -> Result<i64, ApiError> {
     if !(1..=5).contains(&quality) {
         return Err(ApiError::bad_request(
-            "quality must be 1..=5 for custom-tier item grants",
+            "Grade must be 1..=5 for graded item grants",
         ));
     }
     Ok(quality)
@@ -447,7 +447,7 @@ fn validate_custom_tier_grant_quality(quality: i64) -> Result<i64, ApiError> {
 fn ensure_custom_tier_item_gradeable(item: &data::Item) -> Result<(), ApiError> {
     if !item.gradeable {
         return Err(ApiError::bad_request(format!(
-            "{} does not support item quality tiers",
+            "{} does not support Grades",
             item.name
         )));
     }
@@ -658,11 +658,11 @@ mod tests {
 
         let low = validate_custom_tier_grant_quality(0).unwrap_err();
         assert_eq!(low.status, StatusCode::BAD_REQUEST);
-        assert!(low.message.contains("quality must be 1..=5"));
+        assert!(low.message.contains("Grade must be 1..=5"));
 
         let high = validate_custom_tier_grant_quality(6).unwrap_err();
         assert_eq!(high.status, StatusCode::BAD_REQUEST);
-        assert!(high.message.contains("quality must be 1..=5"));
+        assert!(high.message.contains("Grade must be 1..=5"));
     }
 
     #[test]
@@ -673,6 +673,6 @@ mod tests {
         let plain = data::find_item("AluminiumBar").expect("known non-gradeable item");
         let err = ensure_custom_tier_item_gradeable(&plain).unwrap_err();
         assert_eq!(err.status, StatusCode::BAD_REQUEST);
-        assert!(err.message.contains("does not support item quality tiers"));
+        assert!(err.message.contains("does not support Grades"));
     }
 }
