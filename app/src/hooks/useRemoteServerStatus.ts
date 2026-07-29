@@ -57,8 +57,6 @@ export function useRemoteServerStatus({ appendLogRow, setRemoteServers }: UseRem
   const refreshRemoteServerStatus = async (server: RemoteServerRecord) => {
     if (!server.host || !server.keyPath) return;
     setRemoteServerBusy((busy) => ({ ...busy, [server.id]: "Retrieving server information" }));
-    setRemoteServerStatuses((statuses) => omitKey(statuses, server.id));
-    setRemoteServerComponents((components) => omitKey(components, server.id));
     setRemoteComponentLogs((logs) => omitPrefix(logs, `${server.id}:`));
     setRemoteComponentLogBusy((busy) => omitPrefix(busy, `${server.id}:`));
     setRemoteComponentRestartBusy((busy) => omitPrefix(busy, `${server.id}:`));
@@ -89,8 +87,6 @@ export function useRemoteServerStatus({ appendLogRow, setRemoteServers }: UseRem
       );
     } catch (err) {
       const message = errorMessage(err);
-      setRemoteServerStatuses((statuses) => omitKey(statuses, server.id));
-      setRemoteServerComponents((components) => omitKey(components, server.id));
       setRemoteComponentLogs((logs) => omitPrefix(logs, `${server.id}:`));
       setRemoteServerStatusErrors((errors) => ({ ...errors, [server.id]: message }));
       appendLogRow(log.warn("remote.status", message, server.id));

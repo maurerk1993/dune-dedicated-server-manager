@@ -8,6 +8,7 @@ import type {
 } from "../types/server";
 import type { TunnelService } from "../types/tunnel";
 import type { StatusTone } from "../components/ui/StatusPill";
+import { isSnapshotStale } from "./dashboard";
 
 export function remoteServerDefaultUser(_kind: RemoteServerKind): string {
   return "dune";
@@ -115,6 +116,9 @@ export function resolveServerStatus(
 ): ResolvedServerStatus {
   if (statusError) return { tone: "err", label: "Check failed", pulse: false };
   if (!liveStatus) return { tone: "gray", label: busy ? "Checking" : "Unknown", pulse: busy };
+  if (isSnapshotStale(liveStatus)) {
+    return { tone: "warn", label: "Stale snapshot", pulse: false };
+  }
   const battlegroup = liveStatus.battlegroup;
   if (isBattlegroupStarted(battlegroup)) return { tone: "ok", label: "Started", pulse: false };
   if (!battlegroup.stop) return { tone: "warn", label: battlegroup.phase || "Starting", pulse: true };
@@ -131,6 +135,10 @@ export function phaseTone(phase: string): StatusTone {
   const v = phase.trim().toLowerCase();
   if (["running", "ready", "healthy", "available", "reconciling"].includes(v)) return "ok";
   if (["pending", "starting", "deploying", "scheduling", "creating"].includes(v)) return "warn";
-  if (["failed", "error", "crashloop", "crashloopbackoff", "unhealthy"].includes(v)) return "err";
+  if (
+    ["failed", "error", "problem", "crashloop", "crashloopbackoff", "unhealthy"].includes(v)
+  ) {
+    return "err";
+  }
   return "gray";
 }

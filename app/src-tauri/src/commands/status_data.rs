@@ -7,7 +7,7 @@ use crate::commands::shared::sh_single_quoted;
 use crate::commands::status_helpers::{pod_component, server_resource_components};
 use crate::commands::status_naming::friendly_map_name;
 use crate::dto::{
-    RemoteBattlegroupServerStat, RemoteBattlegroupStatus, RemoteServerComponent,
+    RemoteBattlegroupServerStat, RemoteBattlegroupStatus, RemoteHostMetrics, RemoteServerComponent,
     RemoteServerPackageStatus, RemoteServerStatus,
 };
 
@@ -56,6 +56,112 @@ pub fn read_remote_server_status(
     Ok(RemoteServerStatus {
         battlegroup,
         package,
+        collected_at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        host_metrics: read_host_metrics(runner).ok(),
+    })
+}
+
+fn read_host_metrics(runner: &RusshRunner) -> CommandResult<RemoteHostMetrics> {
+    let script = r#"
+set +e
+mem_total_kb=$(awk '$1 == "MemTotal:" { print $2; exit }' /proc/meminfo)
+mem_available_kb=$(awk '$1 == "MemAvailable:" { print $2; exit }' /proc/meminfo)
+if [ -z "$mem_available_kb" ]; then
+  mem_available_kb=$(awk '
+    $1 == "MemFree:" { free = $2 }
+    $1 == "Buffers:" { buffers = $2 }
+    $1 == "Cached:" { cached = $2 }
+    END { print free + buffers + cached }
+  ' /proc/meminfo)
+fi
+swap_total_kb=$(awk '$1 == "SwapTotal:" { print $2; exit }' /proc/meminfo)
+swap_free_kb=$(awk '$1 == "SwapFree:" { print $2; exit }' /proc/meminfo)
+uptime_seconds=$(awk '{ printf "%.0f", $1 }' /proc/uptime)
+load_average_one=$(awk '{ print $1 }' /proc/loadavg)
+
+disk_path=/
+for candidate in /home/dune/.dune/download /home/dune/.dune /home/dune; do
+  if [ -d "$candidate" ]; then
+    disk_path="$candidate"
+    break
+  fi
+done
+disk_values=$(df -Pk "$disk_path" 2>/dev/null | awk 'NR == 2 { print $2, $3 }')
+set -- $disk_values
+disk_total_kb=${1:-0}
+disk_used_kb=${2:-0}
+
+cpu_sample() {
+  awk '/^cpu / {
+    total = 0
+    for (i = 2; i <= NF; i++) total += $i
+    idle = $5 + $6
+    print total, idle
+    exit
+  }' /proc/stat
+}
+set -- $(cpu_sample)
+cpu_total_one=${1:-0}
+cpu_idle_one=${2:-0}
+sleep 0.2
+set -- $(cpu_sample)
+cpu_total_two=${1:-0}
+cpu_idle_two=${2:-0}
+cpu_usage_percent=$(awk \
+  -v total_one="$cpu_total_one" \
+  -v idle_one="$cpu_idle_one" \
+  -v total_two="$cpu_total_two" \
+  -v idle_two="$cpu_idle_two" \
+  'BEGIN {
+    delta_total = total_two - total_one
+    delta_idle = idle_two - idle_one
+    if (delta_total > 0) printf "%.1f", 100 * (delta_total - delta_idle) / delta_total
+  }')
+
+printf 'memTotalKb=%s\n' "${mem_total_kb:-0}"
+printf 'memAvailableKb=%s\n' "${mem_available_kb:-0}"
+printf 'swapTotalKb=%s\n' "${swap_total_kb:-0}"
+printf 'swapFreeKb=%s\n' "${swap_free_kb:-0}"
+printf 'cpuUsagePercent=%s\n' "$cpu_usage_percent"
+printf 'loadAverageOne=%s\n' "$load_average_one"
+printf 'diskTotalKb=%s\n' "$disk_total_kb"
+printf 'diskUsedKb=%s\n' "$disk_used_kb"
+printf 'uptimeSeconds=%s\n' "$uptime_seconds"
+"#;
+    parse_host_metrics(&runner.run_script(script)?)
+        .ok_or_else(|| failure("Remote host returned incomplete resource metrics".to_string()))
+}
+
+fn parse_host_metrics(output: &str) -> Option<RemoteHostMetrics> {
+    let values: std::collections::HashMap<&str, &str> = output
+        .lines()
+        .filter_map(|line| line.trim().split_once('='))
+        .collect();
+    let integer = |key: &str| values.get(key)?.trim().parse::<u64>().ok();
+    let decimal = |key: &str| values.get(key)?.trim().parse::<f64>().ok();
+    let memory_total_kb = integer("memTotalKb")?;
+    let memory_available_kb = integer("memAvailableKb")?;
+    let swap_total_kb = integer("swapTotalKb").unwrap_or_default();
+    let swap_free_kb = integer("swapFreeKb").unwrap_or_default();
+    let disk_total_kb = integer("diskTotalKb")?;
+    let disk_used_kb = integer("diskUsedKb")?;
+    if memory_total_kb == 0 || disk_total_kb == 0 {
+        return None;
+    }
+    Some(RemoteHostMetrics {
+        memory_used_bytes: memory_total_kb
+            .saturating_sub(memory_available_kb)
+            .saturating_mul(1024),
+        memory_total_bytes: memory_total_kb.saturating_mul(1024),
+        swap_used_bytes: swap_total_kb
+            .saturating_sub(swap_free_kb)
+            .saturating_mul(1024),
+        swap_total_bytes: swap_total_kb.saturating_mul(1024),
+        cpu_usage_percent: decimal("cpuUsagePercent").map(|value| value.clamp(0.0, 100.0)),
+        load_average_one: decimal("loadAverageOne"),
+        disk_used_bytes: disk_used_kb.saturating_mul(1024),
+        disk_total_bytes: disk_total_kb.saturating_mul(1024),
+        uptime_seconds: integer("uptimeSeconds").unwrap_or_default(),
     })
 }
 
@@ -321,36 +427,60 @@ pub fn read_remote_server_components(
         ),
         "remote server resources",
     )?;
+    let pod_metrics = runner
+        .run_json(
+            &format!(
+                "sudo kubectl get --raw {}",
+                sh_single_quoted(&format!(
+                    "/apis/metrics.k8s.io/v1beta1/namespaces/{namespace}/pods"
+                ))
+            ),
+            "remote pod resource metrics",
+        )
+        .unwrap_or_else(|_| Value::Null);
 
     let mut components = vec![
-        pod_component("Database", "database", &pods, |role, name| {
+        pod_component("Database", "database", &pods, &pod_metrics, |role, name| {
             role.contains("database") && !name.contains("-util-")
         }),
         pod_component(
             "Database utilities",
             "database-utilities",
             &pods,
+            &pod_metrics,
             |role, _| {
                 role.contains("database-utility")
                     || role.contains("database-monitor")
                     || role.contains("database-pghero")
             },
         ),
-        pod_component("Message Queue", "message-queue", &pods, |role, name| {
-            role.contains("message-queue") || name.contains("-mq-")
-        }),
-        pod_component("Director", "director", &pods, |role, name| {
+        pod_component(
+            "Message Queue",
+            "message-queue",
+            &pods,
+            &pod_metrics,
+            |role, name| role.contains("message-queue") || name.contains("-mq-"),
+        ),
+        pod_component("Director", "director", &pods, &pod_metrics, |role, name| {
             role.contains("battlegroup-director") || name.contains("-bgd-")
         }),
-        pod_component("Gateway", "gateway", &pods, |role, name| {
+        pod_component("Gateway", "gateway", &pods, &pod_metrics, |role, name| {
             role.contains("server-gateway") || name.contains("-sgw-")
         }),
-        pod_component("Text Router", "text-router", &pods, |role, name| {
-            role.contains("text-router") || name.contains("-tr-")
-        }),
-        pod_component("File Browser", "file-browser", &pods, |role, name| {
-            role.contains("filebrowser") || name.contains("-fb-")
-        }),
+        pod_component(
+            "Text Router",
+            "text-router",
+            &pods,
+            &pod_metrics,
+            |role, name| role.contains("text-router") || name.contains("-tr-"),
+        ),
+        pod_component(
+            "File Browser",
+            "file-browser",
+            &pods,
+            &pod_metrics,
+            |role, name| role.contains("filebrowser") || name.contains("-fb-"),
+        ),
     ];
     components.extend(server_resource_components(&resources));
     Ok(components
@@ -690,5 +820,54 @@ mod tests {
         let days = (chrono::Utc::now() - chrono::Duration::days(5) - chrono::Duration::hours(7))
             .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
         assert_eq!(format_age_since_iso(&days), "5d 7h");
+    }
+
+    #[test]
+    fn parses_complete_linux_host_metrics() {
+        let metrics = parse_host_metrics(
+            "memTotalKb=16777216\n\
+             memAvailableKb=6291456\n\
+             swapTotalKb=2097152\n\
+             swapFreeKb=1572864\n\
+             cpuUsagePercent=87.5\n\
+             loadAverageOne=2.75\n\
+             diskTotalKb=524288000\n\
+             diskUsedKb=314572800\n\
+             uptimeSeconds=86461\n",
+        )
+        .expect("metrics parse");
+        assert_eq!(metrics.memory_total_bytes, 16 * 1024 * 1024 * 1024);
+        assert_eq!(metrics.memory_used_bytes, 10 * 1024 * 1024 * 1024);
+        assert_eq!(metrics.swap_used_bytes, 512 * 1024 * 1024);
+        assert_eq!(metrics.cpu_usage_percent, Some(87.5));
+        assert_eq!(metrics.load_average_one, Some(2.75));
+        assert_eq!(metrics.disk_total_bytes, 500 * 1024 * 1024 * 1024);
+        assert_eq!(metrics.disk_used_bytes, 300 * 1024 * 1024 * 1024);
+        assert_eq!(metrics.uptime_seconds, 86461);
+    }
+
+    #[test]
+    fn host_metrics_allow_missing_optional_values() {
+        let metrics = parse_host_metrics(
+            "memTotalKb=1024\n\
+             memAvailableKb=256\n\
+             diskTotalKb=4096\n\
+             diskUsedKb=1024\n",
+        )
+        .expect("partial metrics parse");
+        assert_eq!(metrics.memory_used_bytes, 768 * 1024);
+        assert_eq!(metrics.swap_total_bytes, 0);
+        assert_eq!(metrics.cpu_usage_percent, None);
+        assert_eq!(metrics.load_average_one, None);
+        assert_eq!(metrics.uptime_seconds, 0);
+    }
+
+    #[test]
+    fn host_metrics_reject_missing_or_malformed_required_values() {
+        assert!(parse_host_metrics("memTotalKb=bad\ndiskTotalKb=10\n").is_none());
+        assert!(parse_host_metrics(
+            "memTotalKb=1024\nmemAvailableKb=512\ndiskTotalKb=0\ndiskUsedKb=0\n"
+        )
+        .is_none());
     }
 }

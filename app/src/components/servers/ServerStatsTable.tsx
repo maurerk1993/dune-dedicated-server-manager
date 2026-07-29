@@ -1,5 +1,5 @@
 import type { RemoteBattlegroupServerStat } from "../../types/server";
-import type { StatusTone } from "../ui/StatusPill";
+import StatusPill, { type StatusTone } from "../ui/StatusPill";
 
 export type ServerStatsTableProps = {
   rows: RemoteBattlegroupServerStat[];
@@ -13,6 +13,19 @@ function phaseTone(phase: string): StatusTone {
   return "gray";
 }
 
+function friendlyServerState(phase: string, ready: string): { label: string; tone: StatusTone } {
+  const tone = phaseTone(phase);
+  const normalizedReady = ready.trim().toLowerCase();
+  if (tone === "err" || ["false", "0", "no"].includes(normalizedReady)) {
+    return { label: "Offline", tone: "err" };
+  }
+  if (tone === "warn") return { label: "Starting", tone: "warn" };
+  if (tone === "ok" || ["true", "1", "yes"].includes(normalizedReady)) {
+    return { label: "Online", tone: "ok" };
+  }
+  return { label: phase || "Unknown", tone: "gray" };
+}
+
 /**
  * Compact per-map game-server table parsed from the vendor `battlegroup
  * status` output. Mirrors the wrapper's "Game Servers" section.
@@ -23,24 +36,27 @@ export default function ServerStatsTable({ rows }: ServerStatsTableProps) {
     <div className="server-stats">
       <div className="server-stats-header">
         <span>Map</span>
-        <span>Phase</span>
-        <span>Ready</span>
+        <span>Status</span>
         <span>Players</span>
         <span className="server-stats-cell-age">Age</span>
       </div>
-      {rows.map((row, index) => (
-        <div
-          key={`${row.map}-${row.age}-${index}`}
-          className="server-stats-row"
-          data-tone={phaseTone(row.phase)}
-        >
-          <span>{row.map}</span>
-          <span className="server-stats-cell-phase">{row.phase}</span>
-          <span>{row.ready}</span>
-          <span>{row.players}</span>
-          <span className="server-stats-cell-age">{row.age}</span>
-        </div>
-      ))}
+      {rows.map((row, index) => {
+        const state = friendlyServerState(row.phase, row.ready);
+        return (
+          <div
+            key={`${row.map}-${row.age}-${index}`}
+            className="server-stats-row"
+            data-tone={state.tone}
+          >
+            <span className="server-stats-map">{row.map}</span>
+            <span className="server-stats-cell-phase">
+              <StatusPill label={state.label} tone={state.tone} pulse={state.tone === "warn"} />
+            </span>
+            <span className="server-stats-players">{row.players || "—"}</span>
+            <span className="server-stats-cell-age">{row.age || "—"}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }

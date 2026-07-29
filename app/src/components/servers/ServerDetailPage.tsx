@@ -90,7 +90,7 @@ export default function ServerDetailPage(props: ServerDetailPageProps) {
   } = props;
   const busy = !!busyLabel;
   const liveStatus = statusError ? undefined : status;
-  const resolved = resolveServerStatus(statusError, liveStatus, busy, server);
+  const resolved = resolveServerStatus(statusError, status, busy, server);
 
   const management = useManagementStatus(server, appendLogRow);
   const managementReady = isManagementReady(management.state);
@@ -128,7 +128,7 @@ export default function ServerDetailPage(props: ServerDetailPageProps) {
             <span className="server-host">
               {server.user || remoteServerDefaultUser(server.type)}@{server.host}
               {server.battlegroupName ? ` · ${server.battlegroupName}` : ""}
-              {liveStatus?.battlegroup.uptime ? ` · up ${liveStatus.battlegroup.uptime}` : ""}
+              {status?.battlegroup.uptime ? ` · up ${status.battlegroup.uptime}` : ""}
             </span>
           </Flex>
           <Flex align="center" gap="2">
@@ -169,8 +169,9 @@ export default function ServerDetailPage(props: ServerDetailPageProps) {
           <Tabs.Content value="dashboard" className="server-detail-tab-content">
             <ServerDashboard
               server={server}
-              status={liveStatus}
+              status={status}
               statusError={statusError}
+              components={components}
               busyLabel={busyLabel}
               tunnels={tunnels}
               tunnelBusy={tunnelBusy}
@@ -197,7 +198,7 @@ export default function ServerDetailPage(props: ServerDetailPageProps) {
           <Tabs.Content value="pods" className="server-detail-tab-content">
             <ServerPods
               serverKey={server.id}
-              components={liveStatus ? components : []}
+              components={status ? components : []}
               logs={componentLogs}
               logBusy={componentLogBusy}
               restartBusy={componentRestartBusy}
