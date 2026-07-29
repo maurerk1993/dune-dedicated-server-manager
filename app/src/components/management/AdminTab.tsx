@@ -283,15 +283,15 @@ export default function AdminTab({ tunnelId, prefill, onPrefillConsumed }: Admin
         const quantity = numberValue(values.Quantity, 1);
         const quality = numberValue(values.Quality, 0);
         if (!playerId || playerId === "*") {
-          throw new Error("Custom-tier item grants require one specific offline player.");
+          throw new Error("Graded item grants require one specific offline player.");
         }
         if (!itemId) {
-          throw new Error("Pick an item before granting a custom tier.");
+          throw new Error("Pick an item before granting a Grade.");
         }
         const matches = await managementApi.searchItems(tunnelId, itemId, 10);
         const item = matches.find((row) => row.id === itemId);
         if (!item?.gradeable) {
-          throw new Error("The selected item does not support quality tiers.");
+          throw new Error("The selected item does not support Grades.");
         }
         out = await managementApi.grantQualityItem(tunnelId, playerId, itemId, quantity, quality);
       } else {
@@ -599,25 +599,27 @@ function ItemQualityControl({
     <Box>
       <Flex justify="between" align="baseline" gap="2">
         <Text size="2" weight="medium">
-          Tier - Mk1-Mk6 (0-5)
+          Item Grade
         </Text>
-        <Badge color="amber">gradeable</Badge>
+        <Badge color="amber">supports Grades</Badge>
       </Flex>
       <Box mt="1">
         <Select.Root value={String(safeValue)} onValueChange={(next) => onChange(Number(next))}>
           <Select.Trigger />
           <Select.Content>
-            <Select.Item value="0">0 - Mk1</Select.Item>
-            <Select.Item value="1">1 - Mk2</Select.Item>
-            <Select.Item value="2">2 - Mk3</Select.Item>
-            <Select.Item value="3">3 - Mk4</Select.Item>
-            <Select.Item value="4">4 - Mk5</Select.Item>
-            <Select.Item value="5">5 - Mk6</Select.Item>
+            <Select.Item value="0">No Grade</Select.Item>
+            <Select.Item value="1">Grade 1</Select.Item>
+            <Select.Item value="2">Grade 2</Select.Item>
+            <Select.Item value="3">Grade 3</Select.Item>
+            <Select.Item value="4">Grade 4</Select.Item>
+            <Select.Item value="5">Grade 5</Select.Item>
           </Select.Content>
         </Select.Root>
       </Box>
       <Text size="1" color="gray" as="div" mt="1">
-        Tier 0 uses the normal grant path. Custom tiers require one offline player.
+        Grades are a late-game system for specific schematics and their crafted items, separate
+        from Mk item tiers. No Grade uses the normal grant path; Grades 1-5 require one specific
+        offline player.
       </Text>
     </Box>
   );
@@ -751,7 +753,7 @@ function ItemCatalogPanel({ tunnelId }: { tunnelId: string }) {
         ) : null}
       </Flex>
       <Text size="1" color="gray">
-        Review catalog updates before they affect Grant Item searches or custom-tier item grants.
+        Review catalog updates before they affect Grant Item searches or graded item grants.
       </Text>
 
       {status ? <CatalogStatusSummary status={status} /> : null}
@@ -902,7 +904,7 @@ function CatalogStatusSummary({ status }: { status: ItemCatalogStatusDto }) {
   return (
     <Flex mt="3" gap="2" wrap="wrap">
       <CatalogMetric label="Active items" value={status.active.itemCount} />
-      <CatalogMetric label="Gradeable" value={status.active.gradeableCount} />
+      <CatalogMetric label="Supports Grades" value={status.active.gradeableCount} />
       <CatalogMetric label="Stackable" value={status.active.stackableCount} />
       <CatalogMetric label="Hash" value={shortHash(status.active.catalogHash)} />
       {status.overrideMeta ? (
@@ -919,7 +921,7 @@ function CatalogDiffSummary({ diff }: { diff: ItemCatalogDiffDto }) {
       <CatalogMetric label="Changed" value={diff.changed.length} />
       <CatalogMetric label="Removed" value={diff.removed.length} />
       <CatalogMetric label="Candidate items" value={diff.candidate.itemCount} />
-      <CatalogMetric label="Gradeable" value={diff.candidate.gradeableCount} />
+      <CatalogMetric label="Supports Grades" value={diff.candidate.gradeableCount} />
       <CatalogMetric label="Stackable" value={diff.candidate.stackableCount} />
     </Flex>
   );
@@ -1035,7 +1037,7 @@ function CatalogChangeTableRow({ change }: { change: ItemCatalogChangeDto }) {
 function CatalogItemBadges({ item }: { item: ItemDto }) {
   return (
     <Flex gap="1" wrap="wrap">
-      {item.gradeable ? <Badge color="amber">gradeable</Badge> : null}
+      {item.gradeable ? <Badge color="amber">supports Grades</Badge> : null}
       {item.tier ? <Badge color="gray">tier {item.tier}</Badge> : null}
       {item.stackMax ? <Badge color="gray">stack {item.stackMax}</Badge> : null}
     </Flex>
