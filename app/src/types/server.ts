@@ -28,19 +28,39 @@ export type RemoteBattlegroupServerStat = {
   age: string;
 };
 
+export type RemoteHostMetrics = {
+  memoryUsedBytes: number;
+  memoryTotalBytes: number;
+  swapUsedBytes: number;
+  swapTotalBytes: number;
+  cpuUsagePercent?: number | null;
+  loadAverageOne?: number | null;
+  diskUsedBytes: number;
+  diskTotalBytes: number;
+  uptimeSeconds: number;
+};
+
 export type RemoteServerStatus = {
   battlegroup: RemoteBattlegroupStatus;
   package: RemoteServerPackageStatus;
+  collectedAt: string;
+  hostMetrics?: RemoteHostMetrics | null;
 };
 
 export type RemoteServerComponent = {
   name: string;
   logKey: string;
   category: "system" | "map";
+  componentKind: "pod-group" | "operator-resource";
   state: string;
   tone: BadgeTone;
   summary: string;
   details: string[];
+  readyPods?: number | null;
+  totalPods?: number | null;
+  restartCount: number;
+  cpuMillicores?: number | null;
+  memoryBytes?: number | null;
 };
 
 export type RemoteServerRecord = {

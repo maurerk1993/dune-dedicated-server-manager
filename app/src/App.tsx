@@ -109,10 +109,18 @@ export function App() {
                 <ServersListPage
                   servers={remoteServersHook.remoteServers}
                   statuses={status.remoteServerStatuses}
+                  components={status.remoteServerComponents}
                   statusErrors={status.remoteServerStatusErrors}
                   busyMap={status.remoteServerBusy}
                   onOpenServer={openServer}
                   onAddServer={() => remoteServersHook.setRemoteAttachOpen(true)}
+                  onRefreshAll={() => {
+                    for (const server of remoteServersHook.remoteServers) {
+                      if (!status.remoteServerBusy[server.id]) {
+                        void status.refreshRemoteServerStatus(server);
+                      }
+                    }
+                  }}
                 />
               ) : (
                 <ServerDetailPage

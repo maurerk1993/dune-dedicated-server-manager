@@ -104,6 +104,22 @@ pub struct RemoteBattlegroupServerStat {
 pub struct RemoteServerStatus {
     pub battlegroup: RemoteBattlegroupStatus,
     pub package: RemoteServerPackageStatus,
+    pub collected_at: String,
+    pub host_metrics: Option<RemoteHostMetrics>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteHostMetrics {
+    pub memory_used_bytes: u64,
+    pub memory_total_bytes: u64,
+    pub swap_used_bytes: u64,
+    pub swap_total_bytes: u64,
+    pub cpu_usage_percent: Option<f64>,
+    pub load_average_one: Option<f64>,
+    pub disk_used_bytes: u64,
+    pub disk_total_bytes: u64,
+    pub uptime_seconds: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -121,10 +137,16 @@ pub struct RemoteServerComponent {
     pub name: String,
     pub log_key: String,
     pub category: String,
+    pub component_kind: String,
     pub state: String,
     pub tone: String,
     pub summary: String,
     pub details: Vec<String>,
+    pub ready_pods: Option<u64>,
+    pub total_pods: Option<u64>,
+    pub restart_count: u64,
+    pub cpu_millicores: Option<f64>,
+    pub memory_bytes: Option<u64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
