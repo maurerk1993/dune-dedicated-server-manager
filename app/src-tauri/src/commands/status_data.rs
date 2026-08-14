@@ -409,6 +409,12 @@ printf 'liveBattlegroupVersion=%s\n' "$live_image"
     })
 }
 
+fn is_current_database_utility_pod(role: &str, phase: &str) -> bool {
+    role.contains("database-monitor")
+        || role.contains("database-pghero")
+        || (role.contains("database-utility") && !matches!(phase, "Succeeded" | "Failed"))
+}
+
 pub fn read_remote_server_components(
     runner: &RusshRunner,
     namespace: &str,
@@ -440,46 +446,54 @@ pub fn read_remote_server_components(
         .unwrap_or_else(|_| Value::Null);
 
     let mut components = vec![
-        pod_component("Database", "database", &pods, &pod_metrics, |role, name| {
-            role.contains("database") && !name.contains("-util-")
-        }),
+        pod_component(
+            "Database",
+            "database",
+            &pods,
+            &pod_metrics,
+            |role, name, _| role.contains("database") && !name.contains("-util-"),
+        ),
         pod_component(
             "Database utilities",
             "database-utilities",
             &pods,
             &pod_metrics,
-            |role, _| {
-                role.contains("database-utility")
-                    || role.contains("database-monitor")
-                    || role.contains("database-pghero")
-            },
+            |role, _, phase| is_current_database_utility_pod(role, phase),
         ),
         pod_component(
             "Message Queue",
             "message-queue",
             &pods,
             &pod_metrics,
-            |role, name| role.contains("message-queue") || name.contains("-mq-"),
+            |role, name, _| role.contains("message-queue") || name.contains("-mq-"),
         ),
-        pod_component("Director", "director", &pods, &pod_metrics, |role, name| {
-            role.contains("battlegroup-director") || name.contains("-bgd-")
-        }),
-        pod_component("Gateway", "gateway", &pods, &pod_metrics, |role, name| {
-            role.contains("server-gateway") || name.contains("-sgw-")
-        }),
+        pod_component(
+            "Director",
+            "director",
+            &pods,
+            &pod_metrics,
+            |role, name, _| role.contains("battlegroup-director") || name.contains("-bgd-"),
+        ),
+        pod_component(
+            "Gateway",
+            "gateway",
+            &pods,
+            &pod_metrics,
+            |role, name, _| role.contains("server-gateway") || name.contains("-sgw-"),
+        ),
         pod_component(
             "Text Router",
             "text-router",
             &pods,
             &pod_metrics,
-            |role, name| role.contains("text-router") || name.contains("-tr-"),
+            |role, name, _| role.contains("text-router") || name.contains("-tr-"),
         ),
         pod_component(
             "File Browser",
             "file-browser",
             &pods,
             &pod_metrics,
-            |role, name| role.contains("filebrowser") || name.contains("-fb-"),
+            |role, name, _| role.contains("filebrowser") || name.contains("-fb-"),
         ),
     ];
     components.extend(server_resource_components(&resources));
@@ -777,6 +791,75 @@ mod tests {
         let dto = bg_status(&value).expect("status maps");
         assert_eq!(dto.database_phase, "Ready");
         assert_eq!(dto.director_phase, "Healthy");
+    }
+
+    #[test]
+    fn terminal_database_setup_pods_do_not_degrade_utility_health() {
+        let pods = json!({
+            "items": [
+                {
+                    "metadata": {"name": "db-util-completed", "labels": {"role": "igw-database-utility"}},
+                    "status": {
+                        "phase": "Succeeded",
+                        "containerStatuses": [{
+                            "ready": false,
+                            "restartCount": 0,
+                            "state": {"terminated": {"reason": "Completed"}}
+                        }]
+                    }
+                },
+                {
+                    "metadata": {"name": "db-util-failed", "labels": {"role": "igw-database-utility"}},
+                    "status": {
+                        "phase": "Failed",
+                        "containerStatuses": [{
+                            "ready": false,
+                            "restartCount": 0,
+                            "state": {"terminated": {"reason": "Error"}}
+                        }]
+                    }
+                },
+                {
+                    "metadata": {"name": "db-monitor", "labels": {"role": "igw-database-monitor"}},
+                    "status": {
+                        "phase": "Running",
+                        "containerStatuses": [{
+                            "ready": true,
+                            "restartCount": 0,
+                            "state": {"running": {}}
+                        }]
+                    }
+                },
+                {
+                    "metadata": {"name": "db-pghero", "labels": {"role": "igw-database-pghero"}},
+                    "status": {
+                        "phase": "Running",
+                        "containerStatuses": [{
+                            "ready": true,
+                            "restartCount": 0,
+                            "state": {"running": {}}
+                        }]
+                    }
+                }
+            ]
+        });
+
+        let component = pod_component(
+            "Database utilities",
+            "database-utilities",
+            &pods,
+            &Value::Null,
+            |role, _, phase| is_current_database_utility_pod(role, phase),
+        );
+
+        assert_eq!(component.state, "Ready");
+        assert_eq!(component.ready_pods, Some(2));
+        assert_eq!(component.total_pods, Some(2));
+        assert_eq!(component.details, vec!["2/2 pods ready"]);
+        assert!(is_current_database_utility_pod(
+            "igw-database-utility",
+            "Pending"
+        ));
     }
 
     #[test]

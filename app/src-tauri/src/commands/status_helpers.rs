@@ -10,7 +10,7 @@ pub fn pod_component(
     log_key: &str,
     pods: &Value,
     metrics: &Value,
-    matches: impl Fn(&str, &str) -> bool,
+    matches: impl Fn(&str, &str, &str) -> bool,
 ) -> RemoteServerComponent {
     let usage_by_pod = pod_resource_usage(metrics);
     let mut total = 0u64;
@@ -26,7 +26,8 @@ pub fn pod_component(
         let role = item["metadata"]["labels"]["role"]
             .as_str()
             .unwrap_or_default();
-        if !matches(role, name) {
+        let phase = item["status"]["phase"].as_str().unwrap_or_default();
+        if !matches(role, name, phase) {
             continue;
         }
         total += 1;
@@ -35,7 +36,6 @@ pub fn pod_component(
             cpu_millicores += usage.cpu_millicores;
             memory_bytes = memory_bytes.saturating_add(usage.memory_bytes);
         }
-        let phase = item["status"]["phase"].as_str().unwrap_or_default();
         if !phase.is_empty() {
             phases.push(phase.to_string());
         }
@@ -466,7 +466,7 @@ mod tests {
                 }
             ]
         });
-        let component = pod_component("Database", "database", &pods, &metrics, |role, _| {
+        let component = pod_component("Database", "database", &pods, &metrics, |role, _, _| {
             role == "database"
         });
         assert_eq!(component.component_kind, "pod-group");
@@ -491,7 +491,7 @@ mod tests {
                 }
             }]
         });
-        let component = pod_component("Director", "director", &pods, &Value::Null, |role, _| {
+        let component = pod_component("Director", "director", &pods, &Value::Null, |role, _, _| {
             role == "battlegroup-director"
         });
         assert_eq!(component.state, "Ready");
