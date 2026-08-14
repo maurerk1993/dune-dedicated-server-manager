@@ -7,5 +7,4 @@ pub mod logger;
 pub mod postgres;
 pub mod scheduler;
 pub mod store;
-pub mod systemd_compat;
 pub mod tasks;

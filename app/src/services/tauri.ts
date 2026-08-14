@@ -79,10 +79,6 @@ export async function stopRemoteBattlegroup(request: RemoteActionRequest): Promi
   return invoke<RemoteServerStatus>("stop_remote_battlegroup", { request });
 }
 
-export async function updateRemoteBattlegroup(request: RemoteActionRequest): Promise<RemoteServerStatus> {
-  return invoke<RemoteServerStatus>("update_remote_battlegroup", { request });
-}
-
 export async function restartRemoteBattlegroup(request: RemoteActionRequest): Promise<RemoteServerStatus> {
   return invoke<RemoteServerStatus>("restart_remote_battlegroup", { request });
 }

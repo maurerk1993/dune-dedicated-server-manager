@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { Flex } from "@radix-ui/themes";
+import { Cross2Icon } from "@radix-ui/react-icons";
 
 import type {
   RemoteServerComponent,
@@ -7,6 +9,7 @@ import type {
 } from "../../types/server";
 import type { CustomTunnelStartRequest, ServerTunnelStartRequest, ServerTunnelStatus } from "../../types/tunnel";
 import {
+  attentionFingerprint,
   buildAttentionItems,
   cpuTone,
   formatDuration,
@@ -19,6 +22,10 @@ import {
   totalPlayers,
   usagePercent,
 } from "../../utils/dashboard";
+import {
+  readDashboardAttentionDismissal,
+  writeDashboardAttentionDismissal,
+} from "../../services/storage";
 import {
   isBattlegroupStarted,
   isDirectorReadyPhase,
@@ -105,6 +112,14 @@ export default function ServerDashboard({
     ? usagePercent(metrics.diskUsedBytes, metrics.diskTotalBytes)
     : null;
   const attention = buildAttentionItems(status, components, statusError);
+  const currentAttentionFingerprint = attentionFingerprint(attention);
+  const [dismissedAttentionByServer, setDismissedAttentionByServer] = useState<
+    Record<string, string>
+  >({});
+  const dismissedAttentionFingerprint =
+    dismissedAttentionByServer[server.id] ?? readDashboardAttentionDismissal(server.id);
+  const showAttention =
+    attention.length > 0 && dismissedAttentionFingerprint !== currentAttentionFingerprint;
   const snapshotLabel = formatSnapshotAge(status?.collectedAt);
 
   return (
@@ -191,9 +206,27 @@ export default function ServerDashboard({
         />
       </section>
 
-      {attention.length > 0 ? (
+      {showAttention ? (
         <section className="dashboard-attention" aria-label="Needs attention">
-          <div className="dashboard-attention-title">Needs attention</div>
+          <div className="dashboard-attention-heading">
+            <div className="dashboard-attention-title">Needs attention</div>
+            <button
+              type="button"
+              className="dashboard-attention-dismiss"
+              aria-label="Dismiss current attention notices"
+              title="Dismiss until these notices change"
+              onClick={() => {
+                writeDashboardAttentionDismissal(server.id, currentAttentionFingerprint);
+                setDismissedAttentionByServer((dismissed) => ({
+                  ...dismissed,
+                  [server.id]: currentAttentionFingerprint,
+                }));
+              }}
+            >
+              <Cross2Icon aria-hidden />
+              Dismiss
+            </button>
+          </div>
           <div className="dashboard-attention-list">
             {attention.map((item, index) => (
               <div

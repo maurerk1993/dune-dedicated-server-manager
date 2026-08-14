@@ -30,8 +30,6 @@ import DumpPruneDialog from "./DumpPruneDialog";
 const DIRECT_TASKS: Array<{ id: string; label: string }> = [
   { id: "backup", label: "Backup" },
   { id: "welcome-package", label: "Welcome package scan" },
-  { id: "update-check", label: "Check for server update" },
-  { id: "update-apply", label: "Apply server update" },
   { id: "restart", label: "Restart server" },
 ];
 
@@ -307,11 +305,9 @@ function ScheduleSettings({
   const [minute, setMinute] = useState(0);
   const [warnFreq, setWarnFreq] = useState(600);
   const [warnDur, setWarnDur] = useState(1800);
-  const [updateLead, setUpdateLead] = useState(1800);
   const [tz, setTz] = useState("UTC");
   // Master switches. Undefined from older services reads as enabled.
   const [restartEnabled, setRestartEnabled] = useState(true);
-  const [updateEnabled, setUpdateEnabled] = useState(true);
   const [backupEnabled, setBackupEnabled] = useState(true);
   // 5-field cron (min hour dom mon dow); empty string = disabled.
   const [backupCron, setBackupCron] = useState("");
@@ -330,10 +326,8 @@ function ScheduleSettings({
       setMinute(c.restartMinute);
       setWarnFreq(c.restartWarningFrequencySecs);
       setWarnDur(c.restartWarningDurationSecs);
-      setUpdateLead(c.updateLeadSecs);
       setTz(c.restartTz);
       setRestartEnabled(c.restartEnabled ?? true);
-      setUpdateEnabled(c.updateEnabled ?? true);
       setBackupEnabled(c.backupEnabled ?? true);
       setBackupCron(c.backupCron ?? "");
       setBackupCronStatus({ state: "idle" });
@@ -353,10 +347,8 @@ function ScheduleSettings({
     setMinute(config.restartMinute);
     setWarnFreq(config.restartWarningFrequencySecs);
     setWarnDur(config.restartWarningDurationSecs);
-    setUpdateLead(config.updateLeadSecs);
     setTz(config.restartTz);
     setRestartEnabled(config.restartEnabled ?? true);
-    setUpdateEnabled(config.updateEnabled ?? true);
     setBackupEnabled(config.backupEnabled ?? true);
     setBackupCron(config.backupCron ?? "");
     setBackupCronStatus({ state: "idle" });
@@ -412,10 +404,8 @@ function ScheduleSettings({
         restartMinute: minute,
         restartWarningFrequencySecs: warnFreq,
         restartWarningDurationSecs: warnDur,
-        updateLeadSecs: updateLead,
         restartTz: tz,
         restartEnabled,
-        updateEnabled,
         backupEnabled,
         backupCron: backupCron.trim(),
       });
@@ -461,10 +451,8 @@ function ScheduleSettings({
     minute,
     warnFreq,
     warnDur,
-    updateLead,
     tz,
     restartEnabled,
-    updateEnabled,
     backupEnabled,
     backupCron,
     backupCronStatus,
@@ -575,24 +563,6 @@ function ScheduleSettings({
             onChange={(e) => setWarnFreq(Number(e.target.value) || 0)}
           />
 
-          <Text size="2">Auto update</Text>
-          <Flex align="center" gap="2">
-            <Checkbox
-              checked={updateEnabled}
-              onCheckedChange={(checked) => setUpdateEnabled(Boolean(checked))}
-            />
-            <Text size="2" color="gray">
-              Check Steam for new builds and apply them automatically
-            </Text>
-          </Flex>
-
-          <Text size="2">Update apply lead (seconds)</Text>
-          <TextField.Root
-            type="number"
-            value={String(updateLead)}
-            onChange={(e) => setUpdateLead(Number(e.target.value) || 0)}
-          />
-
           <Text size="2">Auto backup</Text>
           <Flex align="center" gap="2">
             <Checkbox
@@ -658,16 +628,6 @@ function ScheduleSettings({
           <Text size="2" color="gray">Warning frequency</Text>
           <Text size="2">
             {config ? `${config.restartWarningFrequencySecs}s` : "—"}
-          </Text>
-
-          <Text size="2" color="gray">Auto update</Text>
-          <Text size="2">
-            {config ? ((config.updateEnabled ?? true) ? "enabled" : "disabled") : "—"}
-          </Text>
-
-          <Text size="2" color="gray">Update apply lead</Text>
-          <Text size="2">
-            {config ? `${config.updateLeadSecs}s` : "—"}
           </Text>
 
           <Text size="2" color="gray">Auto backup</Text>

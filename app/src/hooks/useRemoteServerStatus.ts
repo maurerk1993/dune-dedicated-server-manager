@@ -7,7 +7,6 @@ import {
   restartRemoteBattlegroup,
   startRemoteBattlegroup,
   stopRemoteBattlegroup,
-  updateRemoteBattlegroup,
 } from "../services/tauri";
 import { persistRemoteServers, upsertRemoteServer } from "../services/storage";
 import type { LogRow } from "../types/log";
@@ -97,13 +96,12 @@ export function useRemoteServerStatus({ appendLogRow, setRemoteServers }: UseRem
 
   const runRemoteBattlegroupAction = async (
     server: RemoteServerRecord,
-    action: "start" | "stop" | "restart" | "update",
+    action: "start" | "stop" | "restart",
   ) => {
     const verbs: Record<typeof action, [busy: string, log: string]> = {
       start: ["Starting battlegroup", "Starting"],
       stop: ["Stopping battlegroup", "Stopping"],
       restart: ["Restarting battlegroup", "Restarting"],
-      update: ["Updating battlegroup", "Updating"],
     };
     const [busyText, verb] = verbs[action];
     setRemoteServerBusy((busy) => ({ ...busy, [server.id]: busyText }));
@@ -118,9 +116,7 @@ export function useRemoteServerStatus({ appendLogRow, setRemoteServers }: UseRem
           ? await startRemoteBattlegroup(request)
           : action === "stop"
             ? await stopRemoteBattlegroup(request)
-            : action === "restart"
-              ? await restartRemoteBattlegroup(request)
-              : await updateRemoteBattlegroup(request);
+            : await restartRemoteBattlegroup(request);
       const components = await getRemoteServerComponents(request);
       setRemoteServerStatuses((statuses) => ({ ...statuses, [liveServer.id]: status }));
       setRemoteServerComponents((current) => ({ ...current, [liveServer.id]: components }));

@@ -34,9 +34,6 @@ pub struct ServiceConfig {
     pub pg_user_override: Option<String>,
     pub pg_db_override: Option<String>,
     pub kubectl_use_sudo: bool,
-    pub service_home: PathBuf,
-    pub steamcmd_path: Option<PathBuf>,
-    pub steamcmd_download_path: Option<PathBuf>,
 }
 
 impl ServiceConfig {
@@ -103,9 +100,6 @@ impl ServiceConfig {
             pg_user_override: nonempty_env("DUNE_PG_USER"),
             pg_db_override: nonempty_env("DUNE_PG_DB"),
             kubectl_use_sudo,
-            service_home: service_home.clone(),
-            steamcmd_path: nonempty_env("DUNE_STEAMCMD_PATH").map(PathBuf::from),
-            steamcmd_download_path: nonempty_env("DUNE_STEAMCMD_DOWNLOAD_PATH").map(PathBuf::from),
         })
     }
 }

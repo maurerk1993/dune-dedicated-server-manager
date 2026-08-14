@@ -9,11 +9,9 @@ use tokio::time::timeout;
 pub mod battlegroup;
 pub mod battlegroup_cli;
 pub mod cluster;
-pub mod steam;
 
 pub use battlegroup_cli::{BattlegroupCli, ReadySummary};
 pub use cluster::{Cluster, ClusterCache};
-pub use steam::SteamCmd;
 
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -164,7 +162,7 @@ impl KubectlClient {
     }
 }
 
-/// Spawn a non-kubectl process (for `battlegroup` wrapper, `steamcmd`, etc.).
+/// Spawn a non-kubectl process for the vendor `battlegroup` wrapper.
 /// Uses the same capture + timeout semantics.
 pub async fn run_process(
     program: &str,

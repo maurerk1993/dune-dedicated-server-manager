@@ -6,12 +6,11 @@ use anyhow::{Context, Result};
 use dune_server_service::admin::MqPublisher;
 use dune_server_service::config::{resolve_command_auth_token, ServiceConfig};
 use dune_server_service::http::{self, AppState};
-use dune_server_service::kubectl::{BattlegroupCli, ClusterCache, KubectlClient, SteamCmd};
+use dune_server_service::kubectl::{BattlegroupCli, ClusterCache, KubectlClient};
 use dune_server_service::logger;
 use dune_server_service::postgres::{PgClient, PgConfig};
 use dune_server_service::scheduler::{Scheduler, TaskRunner};
 use dune_server_service::store::Store;
-use dune_server_service::systemd_compat;
 use dune_server_service::tasks::TaskEnv;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -38,7 +37,7 @@ fn main() -> ExitCode {
 
     // SAFETY: set_var requires no other threads to be running. We are still
     // single-threaded here (before the tokio runtime is built below). Inject a
-    // sane PATH that covers common kubectl / battlegroup / steamcmd locations
+    // sane PATH that covers common kubectl / battlegroup locations
     // so the daemon's subprocesses don't depend on the init system's PATH.
     unsafe {
         let merged = match std::env::var_os("PATH") {
@@ -54,22 +53,6 @@ fn main() -> ExitCode {
     }
 
     logger::init();
-
-    match systemd_compat::repair_on_startup_if_needed() {
-        Ok(true) => {
-            tracing::warn!(
-                "systemd sandbox blocked steamcmd text relocations; compatibility override installed, exiting for restart"
-            );
-            return ExitCode::SUCCESS;
-        }
-        Ok(false) => {}
-        Err(err) => {
-            tracing::error!(
-                error = %err,
-                "failed to verify systemd steamcmd compatibility; steam update checks may fail"
-            );
-        }
-    }
 
     let runtime = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -117,23 +100,6 @@ async fn run() -> Result<()> {
     let cluster = ClusterCache::new(kubectl.clone());
 
     let bg_cli = BattlegroupCli::new(&cfg.bin_dir);
-    let download_path = cfg
-        .steamcmd_download_path
-        .clone()
-        .unwrap_or_else(|| cfg.service_home.join(".dune").join("download"));
-    let steamcmd_bin = cfg
-        .steamcmd_path
-        .clone()
-        .unwrap_or_else(|| cfg.service_home.join(".local").join("bin").join("steamcmd"));
-    let steamcmd = SteamCmd::new(
-        steamcmd_bin,
-        download_path.clone(),
-        cfg.service_home.clone(),
-    );
-    if let Err(err) = steamcmd.ensure_wrapper() {
-        tracing::warn!(error = %err, "could not ensure steamcmd wrapper; update-check will fail until resolved");
-    }
-
     let mq = Arc::new(MqPublisher::new(
         kubectl.clone(),
         cluster.clone(),
@@ -154,9 +120,7 @@ async fn run() -> Result<()> {
     // Master enable switches default to ON so existing installs (no stored
     // row) keep their prior behavior. Backups stay gated behind a cron too.
     let mut restart_enabled = true;
-    let mut update_enabled = true;
     let mut backup_enabled = true;
-    let mut update_lead_secs: i64 = 30 * 60;
     let mut restart_hour: u32 = 5;
     let mut restart_minute: u32 = 0;
     let mut restart_warning_frequency_secs: u64 = 600;
@@ -174,14 +138,8 @@ async fn run() -> Result<()> {
     if let Ok(Some(v)) = store.get_config_i64("restart_enabled") {
         restart_enabled = v != 0;
     }
-    if let Ok(Some(v)) = store.get_config_i64("update_enabled") {
-        update_enabled = v != 0;
-    }
     if let Ok(Some(v)) = store.get_config_i64("backup_enabled") {
         backup_enabled = v != 0;
-    }
-    if let Ok(Some(v)) = store.get_config_i64("update_lead_secs") {
-        update_lead_secs = v;
     }
     if let Ok(Some(v)) = store.get_config_i64("restart_hour") {
         restart_hour = v as u32;
@@ -251,9 +209,7 @@ async fn run() -> Result<()> {
     }
     tracing::info!(
         restart_enabled,
-        update_enabled,
         backup_enabled,
-        update_lead_secs,
         restart_hour,
         restart_minute,
         restart_warning_frequency_secs,
@@ -275,15 +231,10 @@ async fn run() -> Result<()> {
         kubectl: kubectl.clone(),
         cluster: cluster.clone(),
         bg_cli,
-        steamcmd,
         mq,
         pg,
-        bin_dir: cfg.bin_dir.clone(),
-        download_path,
         restart_enabled,
-        update_enabled,
         backup_enabled,
-        update_lead_secs,
         restart_hour,
         restart_minute,
         restart_warning_frequency_secs,

@@ -73,33 +73,6 @@ pub async fn restart_remote_battlegroup(
     .map_err(|err| format!("Remote battlegroup restart worker failed: {err}"))?
 }
 
-#[tauri::command]
-pub async fn update_remote_battlegroup(
-    app: tauri::AppHandle,
-    request: RemoteServerActionRequest,
-) -> Result<RemoteServerStatus, String> {
-    let worker_app = app.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        let mut sink = TauriOperationSink::new(worker_app);
-        sink.info("bg.update", "Running vendor wrapper update.");
-        let runner = runner_for_remote_kind(
-            request.server_type.as_deref(),
-            request.host,
-            request.user,
-            request.key_path,
-            Some(request.port),
-        )?;
-        run_battlegroup_update_with_runner(
-            &runner,
-            &mut sink,
-            request.namespace,
-            request.battlegroup_name,
-        )
-    })
-    .await
-    .map_err(|err| format!("Remote battlegroup update worker failed: {err}"))?
-}
-
 pub async fn run_remote_battlegroup_action(
     app: tauri::AppHandle,
     request: RemoteServerActionRequest,
@@ -191,32 +164,6 @@ fn battlegroup_state_from_status(status: &RemoteBattlegroupStatus) -> Battlegrou
         uptime: status.uptime.clone(),
         server_stats: Vec::new(),
     }
-}
-
-fn run_battlegroup_update_with_runner(
-    runner: &RusshRunner,
-    sink: &mut TauriOperationSink,
-    namespace: String,
-    battlegroup_name: String,
-) -> Result<RemoteServerStatus, String> {
-    let battlegroup = BattlegroupRef {
-        namespace,
-        name: battlegroup_name,
-    };
-    let manager = manager_from_runner(runner);
-    sink.warn(
-        "bg.update",
-        "Running vendor `battlegroup update` (steamcmd + operators + maps + images).",
-    );
-    let stdout = manager
-        .update(&battlegroup, sink)
-        .map_err(command_error_message)?;
-    if !stdout.trim().is_empty() {
-        sink.info("bg.update", stdout.trim().to_string());
-    }
-    sink.info("bg.update", "Refreshing battlegroup state.");
-    read_remote_server_status(runner, &battlegroup.namespace, &battlegroup.name)
-        .map_err(command_error_message)
 }
 
 #[cfg(test)]

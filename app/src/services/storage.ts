@@ -11,6 +11,7 @@ const remoteServersStorageKey = "dune-manager.remote-servers";
 const activePageStorageKey = "dune-manager.active-page";
 const logSidebarStorageKey = "dune-manager.log-sidebar";
 const serverAutoRefreshStorageKey = "dune-manager.server-auto-refresh";
+const dashboardAttentionDismissalsStorageKey = "dune-manager.dashboard-attention-dismissals";
 
 export type ServerAutoRefreshPrefs = {
   enabled: boolean;
@@ -155,6 +156,39 @@ export function readLogSidebar(): PersistedLogSidebar {
 
 export function writeLogSidebar(state: PersistedLogSidebar): void {
   window.localStorage.setItem(logSidebarStorageKey, JSON.stringify(state));
+}
+
+function readDashboardAttentionDismissals(): Record<string, string> {
+  const text = window.localStorage.getItem(dashboardAttentionDismissalsStorageKey);
+  if (!text) return {};
+  try {
+    const parsed = JSON.parse(text) as Record<string, unknown> | null;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string",
+      ),
+    );
+  } catch {
+    window.localStorage.removeItem(dashboardAttentionDismissalsStorageKey);
+    return {};
+  }
+}
+
+export function readDashboardAttentionDismissal(serverId: string): string | null {
+  return readDashboardAttentionDismissals()[serverId] ?? null;
+}
+
+export function writeDashboardAttentionDismissal(
+  serverId: string,
+  fingerprint: string,
+): void {
+  const dismissals = readDashboardAttentionDismissals();
+  dismissals[serverId] = fingerprint;
+  window.localStorage.setItem(
+    dashboardAttentionDismissalsStorageKey,
+    JSON.stringify(dismissals),
+  );
 }
 
 function customTunnelsKey(serverId: string): string {

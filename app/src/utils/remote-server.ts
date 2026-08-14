@@ -2,7 +2,6 @@ import type {
   RemoteBattlegroupStatus,
   RemoteServerComponent,
   RemoteServerKind,
-  RemoteServerPackageStatus,
   RemoteServerRecord,
   RemoteServerStatus,
 } from "../types/server";
@@ -55,22 +54,6 @@ export function isBattlegroupStarted(status: RemoteBattlegroupStatus): boolean {
   if (status.serverGroupPhase && !isStartedPhase(status.serverGroupPhase)) return false;
   if (status.directorPhase && !isDirectorReadyPhase(status.directorPhase)) return false;
   return true;
-}
-
-/**
- * Returns true when the downloaded battlegroup version differs from the
- * version currently running in Kubernetes. Both versions must be known; if
- * either is missing we treat the state as "no actionable update" so the
- * Update Server button stays hidden.
- */
-export function hasBattlegroupUpdateAvailable(
-  pkg: RemoteServerPackageStatus | undefined,
-): boolean {
-  if (!pkg) return false;
-  const downloaded = pkg.battlegroupVersion?.trim();
-  const live = pkg.liveBattlegroupVersion?.trim();
-  if (!downloaded || !live) return false;
-  return downloaded !== live;
 }
 
 export function isDirectorReadyPhase(phase: string): boolean {

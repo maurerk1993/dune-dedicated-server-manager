@@ -210,15 +210,13 @@ export type ScheduleConfig = {
   restartMinute: number;
   restartWarningFrequencySecs: number;
   restartWarningDurationSecs: number;
-  updateLeadSecs: number;
   restartTz: string;
   /**
-   * Master switches for the daily restart, update loop, and scheduled backups.
+   * Master switches for the daily restart and scheduled backups.
    * Optional so older service builds (which omit them) read as undefined;
    * callers should treat undefined as enabled (the default).
    */
   restartEnabled?: boolean;
-  updateEnabled?: boolean;
   backupEnabled?: boolean;
   /** null = scheduled backups disabled; otherwise the 5-field cron string. */
   backupCron: string | null;
@@ -238,10 +236,8 @@ export type ScheduleConfigUpdate = Partial<{
   restartMinute: number;
   restartWarningFrequencySecs: number;
   restartWarningDurationSecs: number;
-  updateLeadSecs: number;
   restartTz: string;
   restartEnabled: boolean;
-  updateEnabled: boolean;
   backupEnabled: boolean;
   /** Empty string clears the cron (disables); non-empty validated server-side. */
   backupCron: string;

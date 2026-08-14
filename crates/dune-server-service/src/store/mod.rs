@@ -5,12 +5,10 @@ use anyhow::{Context, Result};
 use rusqlite::{Connection, OptionalExtension};
 
 pub mod admin_history;
-pub mod pending;
 pub mod runs;
 pub mod welcome;
 
 pub use admin_history::{AdminHistoryEntry, AdminHistoryFilter};
-pub use pending::PendingUpdateRecord;
 pub use runs::{LogEntry, LogLevel, NewLogEntry, TaskRun, TaskRunStatus, TaskTrigger};
 pub use welcome::{
     WelcomeActionRecord, WelcomeActionStatus, WelcomeGrantRecord, WelcomeGrantStatus,
@@ -38,17 +36,9 @@ impl Store {
         conn.pragma_update(None, "foreign_keys", "ON")?;
         conn.execute_batch(SCHEMA)?;
         migrate_schema(&conn)?;
-        let orphaned_update_apply = count_running_update_apply(&conn)?;
         let orphaned = mark_orphaned_runs(&conn)?;
         if orphaned > 0 {
             tracing::warn!(orphaned, "marked orphaned running task_runs as failed");
-        }
-        if orphaned_update_apply > 0 {
-            defer_pending_update_after_orphan(&conn, 5 * 60)?;
-            tracing::warn!(
-                orphaned = orphaned_update_apply,
-                "deferred pending update after orphaned update-apply run"
-            );
         }
         Ok(Self {
             inner: Arc::new(Mutex::new(conn)),
@@ -277,15 +267,6 @@ fn add_column_if_missing(
     Ok(())
 }
 
-fn count_running_update_apply(conn: &Connection) -> rusqlite::Result<usize> {
-    conn.query_row(
-        "SELECT count(*) FROM task_runs WHERE status = 'running' AND task_id = 'update-apply'",
-        [],
-        |row| row.get::<_, i64>(0),
-    )
-    .map(|count| count as usize)
-}
-
 fn mark_orphaned_runs(conn: &Connection) -> rusqlite::Result<usize> {
     conn.execute(
         "UPDATE task_runs
@@ -294,16 +275,6 @@ fn mark_orphaned_runs(conn: &Connection) -> rusqlite::Result<usize> {
              error = COALESCE(error, 'orphaned by daemon restart')
          WHERE status = 'running'",
         rusqlite::params![chrono::Utc::now().to_rfc3339()],
-    )
-}
-
-fn defer_pending_update_after_orphan(
-    conn: &Connection,
-    delay_secs: i64,
-) -> rusqlite::Result<usize> {
-    conn.execute(
-        "UPDATE pending_update SET due_ts = ?1 WHERE id = 1",
-        rusqlite::params![chrono::Utc::now().timestamp() + delay_secs],
     )
 }
 

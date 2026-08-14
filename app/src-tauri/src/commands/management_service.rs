@@ -336,7 +336,7 @@ fn install_inner(
         .encode(render_systemd_unit(unit_path, &account)?.as_bytes());
     let openrc_b64 = base64::engine::general_purpose::STANDARD
         .encode(render_openrc_unit(openrc_path, &account)?.as_bytes());
-    // Stage unit content + drop-in to real temp files before `sudo install`.
+    // Stage unit content to real temp files before `sudo install`.
     // The previous `echo b64 | base64 -d | sudo install /dev/stdin ...` shape
     // breaks on hosts where sudoers has `Defaults use_pty` enabled (default
     // on Ubuntu 24.04+): root-to-root sudo allocates a pty and the piped
@@ -347,16 +347,13 @@ fn install_inner(
         "set -eu\n\
          export PATH=/sbin:/usr/sbin:/usr/local/sbin:$PATH\n\
          tmp_unit=$(mktemp /tmp/dune-unit.XXXXXX)\n\
-         tmp_dropin=$(mktemp /tmp/dune-dropin.XXXXXX)\n\
          tmp_openrc=$(mktemp /tmp/dune-openrc.XXXXXX)\n\
-         trap 'rm -f \"$tmp_unit\" \"$tmp_dropin\" \"$tmp_openrc\"' EXIT\n\
+         trap 'rm -f \"$tmp_unit\" \"$tmp_openrc\"' EXIT\n\
          if command -v systemctl >/dev/null 2>&1; then\n  \
              echo SYSTEMD\n  \
              echo {unit_b64} | base64 -d > \"$tmp_unit\"\n  \
              sudo install -m 0644 -o root -g root \"$tmp_unit\" {unit_dest}\n  \
-             sudo install -d -m 0755 /etc/systemd/system/dune-server-service.service.d\n  \
-             printf '%s\\n' '[Service]' 'NoNewPrivileges=false' 'MemoryDenyWriteExecute=false' > \"$tmp_dropin\"\n  \
-             sudo install -m 0644 -o root -g root \"$tmp_dropin\" /etc/systemd/system/dune-server-service.service.d/zz-dune-steamcmd-compat.conf\n  \
+             sudo rm -f /etc/systemd/system/dune-server-service.service.d/zz-dune-steamcmd-compat.conf\n  \
              sudo systemctl daemon-reload\n  \
              sudo systemctl reset-failed dune-server-service.service >/dev/null 2>&1 || true\n\
          elif command -v rc-service >/dev/null 2>&1; then\n  \

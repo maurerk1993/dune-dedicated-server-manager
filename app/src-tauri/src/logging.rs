@@ -33,10 +33,6 @@ impl TauriOperationSink {
         self.emit_level("info", scope, message);
     }
 
-    pub fn warn(&self, scope: impl Into<String>, message: impl Into<String>) {
-        self.emit_level("warn", scope, message);
-    }
-
     fn emit_level(
         &self,
         level: &'static str,

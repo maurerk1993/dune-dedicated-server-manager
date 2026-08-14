@@ -1,17 +1,14 @@
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use chrono_tz::Tz;
 
 use crate::admin::MqPublisher;
-use crate::kubectl::{BattlegroupCli, ClusterCache, KubectlClient, SteamCmd};
+use crate::kubectl::{BattlegroupCli, ClusterCache, KubectlClient};
 use crate::postgres::PgClient;
 
 pub mod backup;
 pub mod restart;
 pub mod restart_notice;
-pub mod update_apply;
-pub mod update_check;
 pub mod welcome_package;
 
 /// Heavy-weight resources shared by all scheduled tasks. Constructed once in
@@ -21,24 +18,16 @@ pub struct TaskEnv {
     pub kubectl: KubectlClient,
     pub cluster: ClusterCache,
     pub bg_cli: BattlegroupCli,
-    pub steamcmd: SteamCmd,
     pub mq: Arc<MqPublisher>,
     pub pg: Arc<PgClient>,
-    pub bin_dir: PathBuf,
-    pub download_path: PathBuf,
     /// Master switch for the daily restart and its pre-restart warning
     /// broadcast. Defaults to true; existing installs (no stored row) keep the
     /// prior always-on behavior.
     pub restart_enabled: bool,
-    /// Master switch for the automatic update check + apply loop. Defaults to
-    /// true. Manual triggers still work when disabled.
-    pub update_enabled: bool,
     /// Master switch for scheduled backups. Defaults to true, but backups also
     /// require `backup_cron` to be set — this flag lets an operator pause the
     /// cadence without discarding their cron expression.
     pub backup_enabled: bool,
-    /// Lead time before a downloaded update is applied (default 1800s = 30 min).
-    pub update_lead_secs: i64,
     /// Restart-notice + restart wall-clock target (default 05:00).
     pub restart_hour: u32,
     pub restart_minute: u32,
@@ -80,8 +69,6 @@ pub struct TaskEnv {
 pub fn build_all(env: Arc<TaskEnv>) -> Vec<Arc<dyn crate::scheduler::Task>> {
     vec![
         Arc::new(backup::BackupTask::new(env.clone())) as Arc<dyn crate::scheduler::Task>,
-        Arc::new(update_check::UpdateCheckTask::new(env.clone())),
-        Arc::new(update_apply::UpdateApplyTask::new(env.clone())),
         Arc::new(restart_notice::RestartNoticeTask::new(env.clone())),
         Arc::new(restart::RestartTask::new(env.clone())),
         Arc::new(welcome_package::WelcomePackageTask::new(env.clone())),

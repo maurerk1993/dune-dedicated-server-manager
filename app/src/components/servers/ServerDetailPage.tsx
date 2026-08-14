@@ -16,7 +16,6 @@ import StatusPill from "../ui/StatusPill";
 import ServerAutoRefreshControl from "./ServerAutoRefreshControl";
 import ServerDashboard from "./ServerDashboard";
 import ServerPods from "./ServerPods";
-import ServerUpdatePanel from "./ServerUpdatePanel";
 import AdminTab, { type AdminTabPrefill } from "../management/AdminTab";
 import AutomatedTasksTab from "../management/AutomatedTasksTab";
 import UsersTab from "../management/UsersTab";
@@ -46,7 +45,6 @@ export type ServerDetailPageProps = {
   onStartBattlegroup: () => void;
   onStopBattlegroup: () => void;
   onRestartBattlegroup: () => void;
-  onUpdateBattlegroup: () => void;
   onStartTunnel: (request: ServerTunnelStartRequest) => void;
   onStartCustomTunnel: (request: CustomTunnelStartRequest, name: string) => void;
   onStopTunnel: (tunnelId: string) => void;
@@ -79,7 +77,6 @@ export default function ServerDetailPage(props: ServerDetailPageProps) {
     onStartBattlegroup,
     onStopBattlegroup,
     onRestartBattlegroup,
-    onUpdateBattlegroup,
     onStartTunnel,
     onStartCustomTunnel,
     onStopTunnel,
@@ -89,7 +86,6 @@ export default function ServerDetailPage(props: ServerDetailPageProps) {
     appendLogRow,
   } = props;
   const busy = !!busyLabel;
-  const liveStatus = statusError ? undefined : status;
   const resolved = resolveServerStatus(statusError, status, busy, server);
 
   const management = useManagementStatus(server, appendLogRow);
@@ -154,7 +150,6 @@ export default function ServerDetailPage(props: ServerDetailPageProps) {
         >
           <Tabs.List size="2" color="bronze">
             <Tabs.Trigger value="dashboard">Dashboard</Tabs.Trigger>
-            <Tabs.Trigger value="update">Update</Tabs.Trigger>
             <Tabs.Trigger value="pods">Pods</Tabs.Trigger>
             {managementReady ? (
               <>
@@ -185,14 +180,6 @@ export default function ServerDetailPage(props: ServerDetailPageProps) {
               onStartCustomTunnel={onStartCustomTunnel}
               onStopTunnel={onStopTunnel}
               onOpenTunnel={onOpenTunnel}
-            />
-          </Tabs.Content>
-          <Tabs.Content value="update" className="server-detail-tab-content">
-            <ServerUpdatePanel
-              server={server}
-              status={liveStatus}
-              busyLabel={busyLabel}
-              onUpdateBattlegroup={onUpdateBattlegroup}
             />
           </Tabs.Content>
           <Tabs.Content value="pods" className="server-detail-tab-content">

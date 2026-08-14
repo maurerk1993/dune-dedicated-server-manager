@@ -13,19 +13,18 @@ use crate::log_file::LogFile;
 use crate::commands::{
     check_remote_sudo, detect_remote_ubuntu_servers, get_logs_folder, install_management_service,
     management_service_bundled_version, management_service_status, ms_cluster, ms_cron_preview,
-    ms_dump_prune_execute, ms_dump_prune_preview, ms_get_config, ms_grant_quality_item,
-    ms_health, ms_history, ms_item_catalog_apply, ms_item_catalog_check, ms_item_catalog_export,
+    ms_dump_prune_execute, ms_dump_prune_preview, ms_get_config, ms_grant_quality_item, ms_health,
+    ms_history, ms_item_catalog_apply, ms_item_catalog_check, ms_item_catalog_export,
     ms_item_catalog_revert, ms_item_catalog_status, ms_list_commands, ms_list_logs, ms_list_runs,
     ms_list_timezones, ms_player_location, ms_publish, ms_search_items, ms_search_journey_nodes,
     ms_search_players, ms_search_skill_modules, ms_search_vehicles, ms_search_xp_event_tags,
     ms_set_config, ms_set_specialization_level, ms_specialization, ms_trigger_run,
-    ms_welcome_grant_retry, ms_welcome_grants, ms_welcome_whisper,
-    record_operation_log,
+    ms_welcome_grant_retry, ms_welcome_grants, ms_welcome_whisper, record_operation_log,
     remote_component_log_tail, remote_server_components, remote_server_status,
     restart_management_service, restart_remote_battlegroup, restart_remote_component,
     server_tunnel_status, start_custom_tunnel, start_remote_battlegroup, start_server_tunnel,
     stop_all_tunnels, stop_remote_battlegroup, stop_server_tunnel, uninstall_management_service,
-    update_remote_battlegroup, write_item_catalog_export,
+    write_item_catalog_export,
 };
 use crate::state::TunnelRegistry;
 
@@ -69,7 +68,6 @@ pub fn run() {
             start_remote_battlegroup,
             stop_remote_battlegroup,
             restart_remote_battlegroup,
-            update_remote_battlegroup,
             detect_remote_ubuntu_servers,
             check_remote_sudo,
             record_operation_log,

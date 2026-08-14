@@ -32,6 +32,17 @@ export type DashboardAttention = {
   message: string;
 };
 
+export function attentionFingerprint(items: DashboardAttention[]): string {
+  if (items.length === 0) return "";
+  let hash = 2_166_136_261;
+  const text = items.map((item) => `${item.tone}:${item.message}`).join("\n");
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16_777_619);
+  }
+  return `${items.length}:${(hash >>> 0).toString(16).padStart(8, "0")}`;
+}
+
 export function podServiceGroups(components: RemoteServerComponent[]): RemoteServerComponent[] {
   return components.filter(
     (component) => component.category === "system" && component.componentKind === "pod-group",

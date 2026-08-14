@@ -7,8 +7,7 @@ use tokio::time::{sleep, Instant};
 use super::{battlegroup, run_process, KubectlClient};
 
 /// Wraps the vendor `battlegroup` helper at `${DUNE_BIN_DIR}/battlegroup` plus
-/// the readiness-polling utilities both the daily-restart and update-apply
-/// shell scripts hand-rolled.
+/// the readiness-polling utilities used by the daily-restart workflow.
 #[derive(Clone)]
 pub struct BattlegroupCli {
     bin: PathBuf,
@@ -43,22 +42,10 @@ impl BattlegroupCli {
         result.require_ok("battlegroup restart")
     }
 
-    pub async fn update(&self) -> Result<()> {
-        let bin = self.bin_str();
-        let result = run_process(&bin, &["update"], None, 3600).await?;
-        result.require_ok("battlegroup update")
-    }
-
     pub async fn backup(&self, backup_name: &str) -> Result<()> {
         let bin = self.bin_str();
         let result = run_process(&bin, &["backup", backup_name], None, 600).await?;
         result.require_ok(&format!("battlegroup backup {backup_name}"))
-    }
-
-    pub async fn update_from_downloads(&self) -> Result<()> {
-        let bin = self.bin_str();
-        let result = run_process(&bin, &["update-from-downloads"], None, 600).await?;
-        result.require_ok("battlegroup update-from-downloads")
     }
 }
 

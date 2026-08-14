@@ -147,7 +147,6 @@ export function App() {
                   onRestartBattlegroup={() =>
                     status.runRemoteBattlegroupAction(activeServer, "restart")
                   }
-                  onUpdateBattlegroup={() => status.runRemoteBattlegroupAction(activeServer, "update")}
                   onStartTunnel={tunnels.startServerTunnel}
                   onStartCustomTunnel={tunnels.startCustomTunnel}
                   onStopTunnel={tunnels.stopServerTunnel}

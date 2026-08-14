@@ -1,6 +1,5 @@
 export type ServerSubPage =
   | "dashboard"
-  | "update"
   | "pods"
   | "users"
   | "admin"
@@ -17,7 +16,6 @@ export type ServerAutoRefreshInterval = (typeof SERVER_AUTO_REFRESH_INTERVALS)[n
 
 export const SERVER_SUB_PAGES: readonly ServerSubPage[] = [
   "dashboard",
-  "update",
   "pods",
   "users",
   "admin",
