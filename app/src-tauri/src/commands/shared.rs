@@ -3,6 +3,15 @@ use std::path::PathBuf;
 use dune_manager_core::models::CommandFailure;
 use dune_manager_core::orchestration::{RusshRunner, RusshTarget};
 
+/// Status/discovery calls are expected to be quick Kubernetes reads. Keeping
+/// their individual SSH commands short prevents a reconciling battlegroup
+/// from pinning a desktop refresh worker indefinitely.
+pub const REMOTE_READ_COMMAND_TIMEOUT_SECONDS: u64 = 15;
+/// Lifecycle wrapper and polling commands can take longer than status reads,
+/// but should still fail predictably when the remote session stops making
+/// meaningful progress.
+pub const REMOTE_ACTION_COMMAND_TIMEOUT_SECONDS: u64 = 60;
+
 pub fn remote_runner(
     host: String,
     user: String,
@@ -29,6 +38,28 @@ pub fn runner_for_remote_kind(
         .filter(|value| !value.is_empty())
         .ok_or_else(|| "SSH private key is required for remote Ubuntu servers.".to_string())?;
     remote_runner(host, user, key_path, port)
+}
+
+pub fn runner_for_remote_read(
+    server_type: Option<&str>,
+    host: String,
+    user: String,
+    key_path: Option<String>,
+    port: Option<u16>,
+) -> Result<RusshRunner, String> {
+    runner_for_remote_kind(server_type, host, user, key_path, port)
+        .map(|runner| runner.with_command_timeout_seconds(REMOTE_READ_COMMAND_TIMEOUT_SECONDS))
+}
+
+pub fn runner_for_remote_action(
+    server_type: Option<&str>,
+    host: String,
+    user: String,
+    key_path: Option<String>,
+    port: Option<u16>,
+) -> Result<RusshRunner, String> {
+    runner_for_remote_kind(server_type, host, user, key_path, port)
+        .map(|runner| runner.with_command_timeout_seconds(REMOTE_ACTION_COMMAND_TIMEOUT_SECONDS))
 }
 
 pub fn command_error_message(err: CommandFailure) -> String {

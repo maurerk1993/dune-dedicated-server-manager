@@ -1,6 +1,6 @@
 use dune_manager_core::orchestration::RemoteCommandRunner;
 
-use crate::commands::shared::{command_error_message, runner_for_remote_kind};
+use crate::commands::shared::{command_error_message, runner_for_remote_read};
 use crate::commands::status_data::remote_records_from_battlegroups;
 use crate::dto::{RemoteConnectionRequest, RemoteServerRecord};
 
@@ -14,7 +14,7 @@ pub async fn detect_remote_ubuntu_servers(
             ..request
         };
         let user = request.user.clone().unwrap_or_default();
-        let runner = runner_for_remote_kind(
+        let runner = runner_for_remote_read(
             request.server_type.as_deref(),
             request.host.clone(),
             user,

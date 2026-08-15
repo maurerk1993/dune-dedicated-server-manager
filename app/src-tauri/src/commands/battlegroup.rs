@@ -3,7 +3,7 @@ use dune_manager_core::orchestration::{
     RusshRunner, StructuredKubectl, VendorBattlegroupWrapper,
 };
 
-use crate::commands::shared::{command_error_message, runner_for_remote_kind};
+use crate::commands::shared::{command_error_message, runner_for_remote_action};
 use crate::commands::status_data::read_remote_server_status;
 use crate::dto::{RemoteBattlegroupStatus, RemoteServerActionRequest, RemoteServerStatus};
 use crate::logging::TauriOperationSink;
@@ -50,7 +50,7 @@ pub async fn restart_remote_battlegroup(
     tauri::async_runtime::spawn_blocking(move || {
         let mut sink = TauriOperationSink::new(worker_app);
         sink.info("bg.restart", "Restarting remote battlegroup.");
-        let runner = runner_for_remote_kind(
+        let runner = runner_for_remote_action(
             request.server_type.as_deref(),
             request.host,
             request.user,
@@ -82,7 +82,7 @@ pub async fn run_remote_battlegroup_action(
     tauri::async_runtime::spawn_blocking(move || {
         let mut sink = TauriOperationSink::new(worker_app);
         sink.info("bg.check", "Checking remote battlegroup state.");
-        let runner = runner_for_remote_kind(
+        let runner = runner_for_remote_action(
             request.server_type.as_deref(),
             request.host,
             request.user,

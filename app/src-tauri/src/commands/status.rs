@@ -1,4 +1,4 @@
-use crate::commands::shared::{command_error_message, runner_for_remote_kind};
+use crate::commands::shared::{command_error_message, runner_for_remote_read};
 use crate::commands::status_data::{read_remote_server_components, read_remote_server_status};
 use crate::dto::{RemoteServerActionRequest, RemoteServerComponent, RemoteServerStatus};
 
@@ -7,7 +7,7 @@ pub async fn remote_server_status(
     request: RemoteServerActionRequest,
 ) -> Result<RemoteServerStatus, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let runner = runner_for_remote_kind(
+        let runner = runner_for_remote_read(
             request.server_type.as_deref(),
             request.host,
             request.user,
@@ -26,7 +26,7 @@ pub async fn remote_server_components(
     request: RemoteServerActionRequest,
 ) -> Result<Vec<RemoteServerComponent>, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let runner = runner_for_remote_kind(
+        let runner = runner_for_remote_read(
             request.server_type.as_deref(),
             request.host,
             request.user,
