@@ -1,6 +1,7 @@
 //! Sync [`RemoteCommandRunner`] backed by russh with a cached session.
 
 use std::sync::Arc;
+use std::{future::Future, time::Duration};
 
 use tokio::sync::Mutex as AsyncMutex;
 
@@ -11,6 +12,12 @@ use super::session::{
     close as close_session, connect_and_authenticate, exec_capture, shared_runtime, SessionHandle,
 };
 use super::target::RusshTarget;
+
+/// Generous default for commands outside the dashboard refresh path. Callers
+/// that perform short, read-only probes should opt into a smaller deadline via
+/// [`RusshRunner::with_command_timeout_seconds`].
+const DEFAULT_COMMAND_TIMEOUT_SECONDS: u64 = 15 * 60;
+const COMMAND_TIMEOUT_PREFIX: &str = "ssh command timed out";
 
 /// Remote command runner that exposes a sync interface backed by a cached
 /// russh session.
@@ -24,6 +31,7 @@ use super::target::RusshTarget;
 pub struct RusshRunner {
     target: RusshTarget,
     session: Arc<AsyncMutex<Option<SessionHandle>>>,
+    command_timeout: Duration,
 }
 
 impl std::fmt::Debug for RusshRunner {
@@ -40,7 +48,17 @@ impl RusshRunner {
         Self {
             target,
             session: Arc::new(AsyncMutex::new(None)),
+            command_timeout: Duration::from_secs(DEFAULT_COMMAND_TIMEOUT_SECONDS),
         }
+    }
+
+    /// Sets an absolute wall-clock deadline for each call to [`Self::run`],
+    /// [`Self::run_script`], or [`Self::run_with_stdin`]. The deadline covers
+    /// connection, authentication, retry, input transfer, and remote command
+    /// completion so an active-but-stalled SSH session cannot block forever.
+    pub fn with_command_timeout_seconds(mut self, seconds: u64) -> Self {
+        self.command_timeout = Duration::from_secs(seconds.max(1));
+        self
     }
 
     /// Returns the connection target used by this runner.
@@ -66,7 +84,37 @@ impl RusshRunner {
         let command = command.to_string();
         let stdin_body = stdin_body.to_vec();
         shared_runtime()
-            .block_on(async move { runner.exec_with_retry(&command, Some(&stdin_body)).await })
+            .block_on(async move { runner.exec_with_deadline(&command, Some(&stdin_body)).await })
+    }
+
+    async fn exec_with_deadline(
+        &self,
+        command: &str,
+        stdin_body: Option<&[u8]>,
+    ) -> CommandResult<String> {
+        let destination = self.target.destination();
+        let result = await_command_deadline(
+            self.exec_with_retry(command, stdin_body),
+            self.command_timeout,
+            &destination,
+        )
+        .await;
+        if result
+            .as_ref()
+            .is_err_and(|err| err.message.starts_with(COMMAND_TIMEOUT_PREFIX))
+        {
+            self.discard_cached_session().await;
+        }
+        result
+    }
+
+    async fn discard_cached_session(&self) {
+        if let Some(handle) = self.session.lock().await.take() {
+            // Disconnect is best-effort. The important recovery behavior is
+            // removing the suspect cached session so the next refresh starts
+            // with a new SSH connection.
+            let _ = tokio::time::timeout(Duration::from_secs(1), close_session(&handle)).await;
+        }
     }
 
     async fn exec_with_retry(
@@ -107,7 +155,7 @@ impl RemoteCommandRunner for RusshRunner {
     fn run(&self, command: &str) -> CommandResult<String> {
         let runner = self.clone();
         let command = command.to_string();
-        shared_runtime().block_on(async move { runner.exec_with_retry(&command, None).await })
+        shared_runtime().block_on(async move { runner.exec_with_deadline(&command, None).await })
     }
 
     fn run_script(&self, script: &str) -> CommandResult<String> {
@@ -115,10 +163,28 @@ impl RemoteCommandRunner for RusshRunner {
         let script = script.to_string();
         shared_runtime().block_on(async move {
             runner
-                .exec_with_retry("sh -s", Some(script.as_bytes()))
+                .exec_with_deadline("sh -s", Some(script.as_bytes()))
                 .await
         })
     }
+}
+
+async fn await_command_deadline<T, F>(
+    operation: F,
+    timeout: Duration,
+    destination: &str,
+) -> CommandResult<T>
+where
+    F: Future<Output = CommandResult<T>>,
+{
+    tokio::time::timeout(timeout, operation)
+        .await
+        .map_err(|_| {
+            crate::errors::failure(format!(
+                "{COMMAND_TIMEOUT_PREFIX} on {destination} after {}s",
+                timeout.as_secs()
+            ))
+        })?
 }
 
 #[cfg(test)]
@@ -132,5 +198,31 @@ mod tests {
         let _clone = runner.clone();
         assert_eq!(runner.target(), &target);
         assert!(format!("{runner:?}").contains("dune"));
+    }
+
+    #[test]
+    fn command_deadline_returns_success_before_timeout() {
+        let result = shared_runtime().block_on(await_command_deadline(
+            async { Ok::<_, crate::models::CommandFailure>("ready") },
+            Duration::from_secs(1),
+            "dune@example",
+        ));
+        assert_eq!(result.unwrap(), "ready");
+    }
+
+    #[test]
+    fn command_deadline_interrupts_a_stalled_operation() {
+        let result = shared_runtime().block_on(await_command_deadline(
+            async {
+                std::future::pending::<()>().await;
+                Ok::<_, crate::models::CommandFailure>(())
+            },
+            Duration::from_millis(5),
+            "dune@example",
+        ));
+        let error = result.unwrap_err();
+        assert!(error.message.starts_with(COMMAND_TIMEOUT_PREFIX));
+        assert!(error.message.contains("dune@example"));
+        assert_eq!(error.code, None);
     }
 }
