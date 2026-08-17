@@ -27,13 +27,12 @@ import {
   writeDashboardAttentionDismissal,
 } from "../../services/storage";
 import {
-  isBattlegroupStarted,
   isDirectorReadyPhase,
   phaseTone,
   remoteServerDefaultUser,
 } from "../../utils/remote-server";
-import ActionButton from "../ui/ActionButton";
 import Metric from "../ui/Metric";
+import BattlegroupControl from "./BattlegroupControl";
 import ServerStatsTable from "./ServerStatsTable";
 import ServerTunnelControls from "./ServerTunnelControls";
 import CustomTunnelControls from "./CustomTunnelControls";
@@ -89,19 +88,9 @@ export default function ServerDashboard({
   const stale = isSnapshotStale(status);
   const actionableStatus = statusError || stale ? undefined : status;
   const battlegroup = status?.battlegroup;
-  const battlegroupStarted = actionableStatus
-    ? isBattlegroupStarted(actionableStatus.battlegroup)
-    : false;
-  const battlegroupStartRequested = actionableStatus
-    ? !actionableStatus.battlegroup.stop
-    : !!battlegroup && !battlegroup.stop;
-  const battlegroupStopped = actionableStatus
-    ? actionableStatus.battlegroup.stop
-    : !!battlegroup?.stop;
   const directorReady =
     !!actionableStatus &&
     isDirectorReadyPhase(actionableStatus.battlegroup.directorPhase);
-  const busy = !!busyLabel;
   const metrics = status?.hostMetrics;
   const players = totalPlayers(battlegroup?.serverStats);
   const services = summarizeServices(components);
@@ -278,51 +267,15 @@ export default function ServerDashboard({
         )}
       </section>
 
-      <section className="dashboard-section dashboard-control-section">
-        <div>
-          <div className="dashboard-section-title">Battlegroup control</div>
-          <div className="dashboard-section-subtitle">
-            {actionableStatus
-              ? "Lifecycle actions use the latest verified snapshot."
-              : "Refresh the server before lifecycle actions are available."}
-          </div>
-        </div>
-        <div className="action-row">
-          {battlegroupStopped || !actionableStatus ? (
-            <ActionButton
-              onClick={onStartBattlegroup}
-              busy={busy && !battlegroupStarted}
-              disabled={busy || !actionableStatus || !battlegroupStopped}
-              tone="accent"
-              pendingLabel="Starting"
-            >
-              Start BattleGroup
-            </ActionButton>
-          ) : null}
-          {battlegroupStartRequested ? (
-            <>
-              <ActionButton
-                onClick={onRestartBattlegroup}
-                busy={busy}
-                disabled={busy || !actionableStatus}
-                tone="default"
-                pendingLabel="Restarting"
-              >
-                Restart
-              </ActionButton>
-              <ActionButton
-                onClick={onStopBattlegroup}
-                busy={busy && battlegroupStartRequested && !battlegroupStopped}
-                disabled={busy || !actionableStatus}
-                tone="danger"
-                pendingLabel="Stopping"
-              >
-                Stop BattleGroup
-              </ActionButton>
-            </>
-          ) : null}
-        </div>
-      </section>
+      <BattlegroupControl
+        status={status}
+        statusError={statusError}
+        busyLabel={busyLabel}
+        includeRestart
+        onStart={onStartBattlegroup}
+        onStop={onStopBattlegroup}
+        onRestart={onRestartBattlegroup}
+      />
 
       <section className="dashboard-section dashboard-technical-section">
         <div className="dashboard-section-heading">

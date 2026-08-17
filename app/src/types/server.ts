@@ -22,10 +22,22 @@ export type RemoteBattlegroupStatus = {
 
 export type RemoteBattlegroupServerStat = {
   map: string;
+  rawMap?: string;
+  sietch?: string;
+  partitionIndex?: number | null;
+  dimension?: number | null;
   phase: string;
   ready: string;
   players: string;
   age: string;
+  gamePhase?: string;
+  runtimeReady?: string;
+  simulationFps?: number | null;
+  battlegroupLeader?: boolean | null;
+  restarts?: number | null;
+  serverName?: string;
+  gamePort?: number | null;
+  igwPort?: number | null;
 };
 
 export type RemoteHostMetrics = {

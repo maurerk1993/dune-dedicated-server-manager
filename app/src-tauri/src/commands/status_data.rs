@@ -36,8 +36,8 @@ pub fn read_remote_server_status(
     // Per-partition live data (player count, gamePhase, ready) lives on a
     // separate ServerStats CRD published by the Funcom operator — the same
     // source `F:\Dune\Server\gt-server-status\gt_server_status.py` consumes.
-    // Failing to fetch this is non-fatal; the table just shows blank
-    // players where it can't be merged.
+    // Failing to fetch this is non-fatal; the UI still shows operator state
+    // while runtime-only fields remain unavailable.
     let stats = runner
         .run_json(
             &format!(
@@ -245,13 +245,22 @@ pub(crate) fn battlegroup_status_from_json_with_stats(
 #[derive(Default, Clone)]
 struct PartitionStats {
     players: Option<i64>,
+    raw_map: String,
+    sietch: String,
+    dimension: Option<i64>,
+    game_phase: String,
+    runtime_ready: String,
+    simulation_fps: Option<f64>,
+    battlegroup_leader: Option<bool>,
+    server_name: String,
 }
 
 /// Build a `partition_index -> PartitionStats` map from a `kubectl get
 /// serverstats -n <ns> -o json` payload. The Funcom operator emits one
 /// ServerStats CR per partition with `spec.area.partition` as the id and
-/// `status.runtime.players` as the live count. Same source the
-/// `gt_server_status.py` cron script consumes.
+/// `status.runtime` as the live game telemetry. Same source the
+/// `gt_server_status.py` cron script consumes. Keep this parser tolerant of
+/// absent fields because ServerStats is populated incrementally during boot.
 fn index_serverstats_by_partition(stats: &Value) -> std::collections::HashMap<i64, PartitionStats> {
     let mut out = std::collections::HashMap::new();
     let Some(items) = stats.get("items").and_then(Value::as_array) else {
@@ -264,14 +273,71 @@ fn index_serverstats_by_partition(stats: &Value) -> std::collections::HashMap<i6
             .and_then(|a| a.get("partition"))
             .and_then(Value::as_i64);
         let Some(partition) = partition else { continue };
-        let players = item
-            .get("status")
-            .and_then(|s| s.get("runtime"))
+        let area = item.get("spec").and_then(|s| s.get("area"));
+        let status = item.get("status");
+        let runtime = status.and_then(|s| s.get("runtime"));
+        let players = runtime
             .and_then(|r| r.get("players"))
             .and_then(Value::as_i64);
-        out.insert(partition, PartitionStats { players });
+        let simulation_fps = runtime.and_then(|r| r.get("sfps")).and_then(decimal_value);
+        out.insert(
+            partition,
+            PartitionStats {
+                players,
+                raw_map: area
+                    .and_then(|a| a.get("map"))
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string(),
+                sietch: area
+                    .and_then(|a| a.get("sietch"))
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string(),
+                dimension: area
+                    .and_then(|a| a.get("dimension"))
+                    .and_then(Value::as_i64),
+                game_phase: runtime
+                    .and_then(|r| r.get("gamePhase"))
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string(),
+                runtime_ready: runtime
+                    .and_then(|r| r.get("ready"))
+                    .map(value_to_string)
+                    .unwrap_or_default(),
+                simulation_fps,
+                battlegroup_leader: status
+                    .and_then(|s| s.get("leadership"))
+                    .and_then(|l| l.get("battlegroup"))
+                    .and_then(Value::as_bool),
+                server_name: item
+                    .get("metadata")
+                    .and_then(|m| m.get("name"))
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string(),
+            },
+        );
     }
     out
+}
+
+fn decimal_value(value: &Value) -> Option<f64> {
+    match value {
+        Value::Number(number) => number.as_f64(),
+        Value::String(text) => text.trim().parse::<f64>().ok(),
+        _ => None,
+    }
+}
+
+fn value_to_string(value: &Value) -> String {
+    match value {
+        Value::String(text) => text.clone(),
+        Value::Number(number) => number.to_string(),
+        Value::Bool(value) => value.to_string(),
+        _ => String::new(),
+    }
 }
 
 fn string_field(value: &Value, key: &str) -> String {
@@ -293,27 +359,25 @@ fn server_stat_from_json(
     // Older / alternate operators have used `map` or `name`, so we keep
     // those as fallbacks. With no map at all `friendly_map_name` returns
     // "Game Server" which is what we want to avoid here.
+    let partition_index = server
+        .get("partitionIndex")
+        .and_then(Value::as_u64)
+        .or_else(|| server.get("ordinalIndex").and_then(Value::as_u64));
+    let partition_stats = partition_index.and_then(|index| stats_by_partition.get(&(index as i64)));
     let raw_map = server
         .get("partitionMap")
         .and_then(Value::as_str)
         .or_else(|| server.get("map").and_then(Value::as_str))
         .or_else(|| server.get("name").and_then(Value::as_str))
+        .filter(|value| !value.is_empty())
+        .or_else(|| partition_stats.map(|stats| stats.raw_map.as_str()))
         .unwrap_or_default();
-    let partition_index = server
-        .get("partitionIndex")
-        .and_then(Value::as_u64)
-        .or_else(|| server.get("ordinalIndex").and_then(Value::as_u64));
     let friendly = friendly_map_name(raw_map, raw_map);
     let labelled = match partition_index {
         Some(idx) => format!("{friendly} #{idx}"),
         None => friendly,
     };
-    let ready_str = match server.get("ready") {
-        Some(Value::Bool(b)) => b.to_string(),
-        Some(Value::String(s)) => s.clone(),
-        Some(Value::Number(n)) => n.to_string(),
-        _ => String::new(),
-    };
+    let ready_str = server.get("ready").map(value_to_string).unwrap_or_default();
     // The BG CR's status.servers[] entries don't carry a player count or
     // age; we inherit the BG-level age and merge the per-partition player
     // count from the matching ServerStats CR (keyed by partitionIndex).
@@ -322,17 +386,39 @@ fn server_stat_from_json(
     } else {
         bg_age.to_string()
     };
-    let players = partition_index
-        .and_then(|idx| stats_by_partition.get(&(idx as i64)))
-        .and_then(|s| s.players)
+    let players = partition_stats
+        .and_then(|stats| stats.players)
         .map(|n| n.to_string())
         .unwrap_or_default();
     RemoteBattlegroupServerStat {
         map: labelled,
+        raw_map: raw_map.to_string(),
+        sietch: partition_stats
+            .map(|stats| stats.sietch.clone())
+            .unwrap_or_default(),
+        partition_index,
+        dimension: server
+            .get("dimensionIndex")
+            .and_then(Value::as_i64)
+            .or_else(|| partition_stats.and_then(|stats| stats.dimension)),
         phase: string_field(server, "phase"),
         ready: ready_str,
         players,
         age,
+        game_phase: partition_stats
+            .map(|stats| stats.game_phase.clone())
+            .unwrap_or_default(),
+        runtime_ready: partition_stats
+            .map(|stats| stats.runtime_ready.clone())
+            .unwrap_or_default(),
+        simulation_fps: partition_stats.and_then(|stats| stats.simulation_fps),
+        battlegroup_leader: partition_stats.and_then(|stats| stats.battlegroup_leader),
+        restarts: server.get("restarts").and_then(Value::as_u64),
+        server_name: partition_stats
+            .map(|stats| stats.server_name.clone())
+            .unwrap_or_default(),
+        game_port: server.get("gamePort").and_then(Value::as_u64),
+        igw_port: server.get("igwPort").and_then(Value::as_u64),
     }
 }
 
@@ -680,6 +766,91 @@ mod tests {
         assert_eq!(dto.server_stats[0].players, "7");
         assert_eq!(dto.server_stats[1].players, "0");
         assert_eq!(dto.server_stats[2].players, "3");
+    }
+
+    #[test]
+    fn server_stats_merge_rich_runtime_telemetry_from_live_cr_shape() {
+        let value = bg(
+            json!({"stop": false}),
+            json!({
+                "phase": "Reconciling",
+                "servers": [{
+                    "partitionMap": "Survival_1",
+                    "partitionIndex": 1,
+                    "dimensionIndex": 0,
+                    "phase": "Initializing",
+                    "ready": false,
+                    "restarts": 2,
+                    "gamePort": 7778,
+                    "igwPort": 7889,
+                }],
+            }),
+        );
+        let stats = json!({
+            "items": [{
+                "metadata": {"name": "sh-test-sg-survival-1-pod-1"},
+                "spec": {"area": {
+                    "partition": 1,
+                    "dimension": 0,
+                    "map": "Survival_1",
+                    "sietch": "Abbir"
+                }},
+                "status": {
+                    "leadership": {"battlegroup": true},
+                    "runtime": {
+                        "gamePhase": "PostLandscapePhysics",
+                        "players": 4,
+                        "ready": false,
+                        "sfps": "19.48"
+                    }
+                }
+            }]
+        });
+
+        let dto = battlegroup_status_from_json_with_stats(&value, &stats).expect("status maps");
+        let map = &dto.server_stats[0];
+        assert_eq!(map.map, "Hagga Basin #1");
+        assert_eq!(map.raw_map, "Survival_1");
+        assert_eq!(map.sietch, "Abbir");
+        assert_eq!(map.partition_index, Some(1));
+        assert_eq!(map.dimension, Some(0));
+        assert_eq!(map.phase, "Initializing");
+        assert_eq!(map.ready, "false");
+        assert_eq!(map.players, "4");
+        assert_eq!(map.game_phase, "PostLandscapePhysics");
+        assert_eq!(map.runtime_ready, "false");
+        assert_eq!(map.simulation_fps, Some(19.48));
+        assert_eq!(map.battlegroup_leader, Some(true));
+        assert_eq!(map.restarts, Some(2));
+        assert_eq!(map.server_name, "sh-test-sg-survival-1-pod-1");
+        assert_eq!(map.game_port, Some(7778));
+        assert_eq!(map.igw_port, Some(7889));
+    }
+
+    #[test]
+    fn server_stats_ignore_malformed_optional_runtime_values() {
+        let value = bg(
+            json!({"stop": false}),
+            json!({
+                "servers": [{
+                    "partitionMap": "Overmap",
+                    "partitionIndex": 2,
+                    "phase": "Running",
+                    "ready": true
+                }],
+            }),
+        );
+        let stats = json!({
+            "items": [{
+                "spec": {"area": {"partition": 2, "map": "Overmap"}},
+                "status": {"runtime": {"players": "unknown", "sfps": "not-a-number"}}
+            }]
+        });
+
+        let dto = battlegroup_status_from_json_with_stats(&value, &stats).expect("status maps");
+        assert_eq!(dto.server_stats[0].players, "");
+        assert_eq!(dto.server_stats[0].simulation_fps, None);
+        assert_eq!(dto.server_stats[0].runtime_ready, "");
     }
 
     #[test]

@@ -93,10 +93,22 @@ pub struct RemoteBattlegroupStatus {
 #[serde(rename_all = "camelCase")]
 pub struct RemoteBattlegroupServerStat {
     pub map: String,
+    pub raw_map: String,
+    pub sietch: String,
+    pub partition_index: Option<u64>,
+    pub dimension: Option<i64>,
     pub phase: String,
     pub ready: String,
     pub players: String,
     pub age: String,
+    pub game_phase: String,
+    pub runtime_ready: String,
+    pub simulation_fps: Option<f64>,
+    pub battlegroup_leader: Option<bool>,
+    pub restarts: Option<u64>,
+    pub server_name: String,
+    pub game_port: Option<u64>,
+    pub igw_port: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
