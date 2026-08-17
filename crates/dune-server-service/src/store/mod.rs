@@ -103,7 +103,10 @@ impl Store {
             .map_err(|_| anyhow::anyhow!("store mutex poisoned"))?;
         let tx = guard.transaction()?;
         for key in keys {
-            tx.execute("DELETE FROM task_config WHERE key = ?1", rusqlite::params![key])?;
+            tx.execute(
+                "DELETE FROM task_config WHERE key = ?1",
+                rusqlite::params![key],
+            )?;
         }
         tx.commit().map_err(Into::into)
     }

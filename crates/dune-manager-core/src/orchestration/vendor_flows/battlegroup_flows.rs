@@ -114,8 +114,6 @@ mod tests {
                 "edit-battlegroup",
                 "edit-battlegroup-advanced",
                 "enable-experimental-swap",
-                "backup",
-                "import",
                 "logs-export",
                 "operator-logs-export",
                 "open-file-browser",

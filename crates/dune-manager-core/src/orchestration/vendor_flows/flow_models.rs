@@ -140,10 +140,6 @@ pub enum BattlegroupCommand {
     EditBattlegroupAdvanced,
     /// Enable vendor experimental swap profile.
     EnableExperimentalSwap,
-    /// Back up the battlegroup database.
-    BackupDatabase,
-    /// Import a battlegroup database backup.
-    ImportDatabase,
     /// Export battlegroup logs.
     LogsExport,
     /// Export operator logs.

@@ -47,14 +47,6 @@ pub fn router(state: AppState) -> Router {
             axum::routing::get(api_runs::list_timezones),
         )
         .route(
-            "/api/cron/preview",
-            axum::routing::get(api_runs::cron_preview),
-        )
-        .route(
-            "/api/maintenance/dump-prune",
-            axum::routing::get(api_runs::dump_prune_preview).post(api_runs::dump_prune_execute),
-        )
-        .route(
             "/api/admin/commands",
             axum::routing::get(api_admin::list_commands),
         )

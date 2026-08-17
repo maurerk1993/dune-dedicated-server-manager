@@ -320,12 +320,12 @@ mod tests {
     fn run_lifecycle_and_logging_roundtrip() {
         let s = open_store();
         let id = s
-            .start_run("backup", TaskTrigger::Scheduled, false)
+            .start_run("restart", TaskTrigger::Scheduled, false)
             .unwrap();
         s.log(&NewLogEntry {
             level: LogLevel::Info,
             message: "starting",
-            task_id: Some("backup"),
+            task_id: Some("restart"),
             run_id: Some(id),
         })
         .unwrap();
@@ -345,11 +345,11 @@ mod tests {
     #[test]
     fn delete_run_cascades_logs() {
         let s = open_store();
-        let id = s.start_run("backup", TaskTrigger::Manual, true).unwrap();
+        let id = s.start_run("restart", TaskTrigger::Manual, true).unwrap();
         s.log(&NewLogEntry {
             level: LogLevel::Info,
             message: "noop",
-            task_id: Some("backup"),
+            task_id: Some("restart"),
             run_id: Some(id),
         })
         .unwrap();

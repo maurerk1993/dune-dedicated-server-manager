@@ -117,10 +117,9 @@ async fn run() -> Result<()> {
     // Defaults; operator can override any of these via POST /api/config which
     // upserts into the `task_config` KV table. We apply them at startup only —
     // a change to /api/config requires a service restart to take effect.
-    // Master enable switches default to ON so existing installs (no stored
-    // row) keep their prior behavior. Backups stay gated behind a cron too.
+    // The restart master switch defaults to ON so existing installs (no stored
+    // row) keep their prior behavior.
     let mut restart_enabled = true;
-    let mut backup_enabled = true;
     let mut restart_hour: u32 = 5;
     let mut restart_minute: u32 = 0;
     let mut restart_warning_frequency_secs: u64 = 600;
@@ -131,15 +130,8 @@ async fn run() -> Result<()> {
     let mut welcome_package_actions_json = String::from("[]");
     let mut welcome_whisper_source_player = String::new();
     let mut welcome_message = String::new();
-    // Backups default to OFF. Operator opts in by POSTing /api/config with a
-    // cron expression in `backupCron`.
-    let mut backup_cron: Option<cron::Schedule> = None;
-    let mut backup_cron_raw: Option<String> = None;
     if let Ok(Some(v)) = store.get_config_i64("restart_enabled") {
         restart_enabled = v != 0;
-    }
-    if let Ok(Some(v)) = store.get_config_i64("backup_enabled") {
-        backup_enabled = v != 0;
     }
     if let Ok(Some(v)) = store.get_config_i64("restart_hour") {
         restart_hour = v as u32;
@@ -170,20 +162,6 @@ async fn run() -> Result<()> {
     if let Ok(Some(v)) = store.get_config("welcome_message") {
         welcome_message = v;
     }
-    if let Ok(Some(expr)) = store.get_config("backup_cron") {
-        let trimmed = expr.trim();
-        if !trimmed.is_empty() {
-            match dune_server_service::scheduler::schedule::parse_cron(trimmed) {
-                Ok(schedule) => {
-                    backup_cron = Some(schedule);
-                    backup_cron_raw = Some(trimmed.to_string());
-                }
-                Err(err) => {
-                    tracing::warn!(stored = %trimmed, error = %err, "ignoring invalid stored backup_cron");
-                }
-            }
-        }
-    }
     let welcome_package_actions =
         match dune_server_service::tasks::welcome_package::parse_welcome_actions(
             &welcome_package_actions_json,
@@ -209,12 +187,10 @@ async fn run() -> Result<()> {
     }
     tracing::info!(
         restart_enabled,
-        backup_enabled,
         restart_hour,
         restart_minute,
         restart_warning_frequency_secs,
         restart_warning_duration_secs,
-        backup_cron = backup_cron_raw.as_deref().unwrap_or("(disabled)"),
         welcome_package_enabled,
         welcome_message_enabled,
         welcome_package_version = %welcome_package_version,
@@ -234,14 +210,11 @@ async fn run() -> Result<()> {
         mq,
         pg,
         restart_enabled,
-        backup_enabled,
         restart_hour,
         restart_minute,
         restart_warning_frequency_secs,
         restart_warning_duration_secs,
         restart_tz: effective_tz,
-        backup_cron,
-        backup_cron_raw,
         welcome_package_enabled,
         welcome_message_enabled,
         welcome_package_version,

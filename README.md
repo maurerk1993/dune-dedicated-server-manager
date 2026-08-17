@@ -7,7 +7,7 @@ A desktop manager for existing Dune Awakening dedicated servers.
 The app manages already-provisioned Dune dedicated servers over SSH and
 Kubernetes control commands. It does not install or update the game server,
 create VMs, configure Hyper-V, provision Ubuntu, or manage external tools such
-as SteamCMD. Use Funcom's provided script for game-server updates.
+as SteamCMD. Use Funcom's provided script for game-server updates and backups.
 
 ## Features
 
@@ -15,9 +15,9 @@ as SteamCMD. Use Funcom's provided script for game-server updates.
 - BattleGroup status, start, stop, and restart controls
 - Component diagnostics, log viewing, and safe restart actions
 - Secure Director, File Browser, PostgreSQL, and PgHero access through local SSH tunnels
-- Bundled `dune-server-service` daemon for on-host scheduled maintenance (daily restarts with in-game warnings and automated backups) — installed over SSH straight from the Management card
+- Bundled `dune-server-service` daemon for on-host scheduled maintenance (daily restarts with in-game warnings) — installed over SSH straight from the Management card
 - Admin console for in-game actions: item grants, vehicle spawns, skill/journey/XP tags, player lookup with live pawn location, and a logged history of every published command
-- Automated tasks tab with editable schedule settings (daily restart time, warning lead/frequency, backup cadence, and IANA timezone) — saving auto-restarts the service so changes apply immediately
+- Automated tasks tab with editable daily restart time, warning lead/frequency, and IANA timezone — saving auto-restarts the service so changes apply immediately
 - Welcome Package automation: a per-player onboarding chain (item grants, water refill, welcome whisper) driven by Postgres player detection, tracked in the management service's SQLite ledger, and configurable from the Welcome Package tab with both a visual editor and a raw JSON mode
 
 ![Admin tab — granting items to online players with a searchable Funcom item picker](images/ss-2.png)

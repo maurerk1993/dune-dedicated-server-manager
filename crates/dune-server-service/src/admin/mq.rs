@@ -6,6 +6,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::Serialize;
 use serde_json::{json, Value};
+use tokio::sync::Mutex;
 
 use crate::kubectl::{ClusterCache, KubectlClient};
 
@@ -17,6 +18,11 @@ const APP_ID: &str = "fls_backend";
 
 static SAFE_LABEL_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$").unwrap());
+
+const RABBITMQ_EVAL_SHELL: &str = "set -eu; \
+    export PATH=/opt/rabbitmq/sbin:/opt/erlang/lib/erlang/bin:/bin:/usr/bin:/usr/local/bin:$PATH; \
+    expr=$(cat); \
+    /opt/rabbitmq/sbin/rabbitmqctl eval \"$expr\"";
 
 #[derive(Debug, Clone, Copy)]
 pub enum ShutdownType {
@@ -46,6 +52,10 @@ pub struct MqPublisher {
     kubectl: KubectlClient,
     cluster: ClusterCache,
     token: Arc<String>,
+    /// RabbitMQ commands are intentionally serialized. Besides keeping
+    /// operator actions ordered, this prevents concurrent admin/background
+    /// publishes from interfering with one another inside the MQ pod.
+    publish_lock: Arc<Mutex<()>>,
 }
 
 impl MqPublisher {
@@ -54,6 +64,7 @@ impl MqPublisher {
             kubectl,
             cluster,
             token: Arc::new(token),
+            publish_lock: Arc::new(Mutex::new(())),
         }
     }
 
@@ -176,16 +187,10 @@ pub async fn publish_inner(
     inner: &Value,
     label: &str,
 ) -> Result<PublishResult> {
+    let _publish_guard = publisher.publish_lock.lock().await;
     let cluster = publisher.cluster.get().await?;
     let payload_b64 = envelope_for_command(inner, publisher.token());
     let erlang = build_erlang_publish(&payload_b64, label);
-
-    let shell = "set -eu; \
-        export PATH=/opt/rabbitmq/sbin:/opt/erlang/lib/erlang/bin:/bin:/usr/bin:/usr/local/bin:$PATH; \
-        cat > /tmp/dune-mq-publish.erl; \
-        expr=$(cat /tmp/dune-mq-publish.erl); \
-        /opt/rabbitmq/sbin/rabbitmqctl eval \"$expr\"; \
-        rm -f /tmp/dune-mq-publish.erl";
 
     let result = publisher
         .kubectl
@@ -199,7 +204,7 @@ pub async fn publish_inner(
                 "--",
                 "sh",
                 "-lc",
-                shell,
+                RABBITMQ_EVAL_SHELL,
             ],
             Some(&erlang),
             30,
@@ -233,6 +238,7 @@ pub async fn publish_whisper(
     body: &Value,
     label: &str,
 ) -> Result<PublishResult> {
+    let _publish_guard = publisher.publish_lock.lock().await;
     let cluster = publisher.cluster.get().await?;
     let payload_b64 = base64::engine::general_purpose::STANDARD
         .encode(serde_json::to_vec(body).context("serializing whisper body")?);
@@ -240,13 +246,6 @@ pub async fn publish_whisper(
     let sender_fls_id_b64 = base64::engine::general_purpose::STANDARD.encode(sender_fls_id);
     let erlang =
         build_erlang_whisper_publish(&payload_b64, &routing_key_b64, &sender_fls_id_b64, label);
-
-    let shell = "set -eu; \
-        export PATH=/opt/rabbitmq/sbin:/opt/erlang/lib/erlang/bin:/bin:/usr/bin:/usr/local/bin:$PATH; \
-        cat > /tmp/dune-mq-whisper.erl; \
-        expr=$(cat /tmp/dune-mq-whisper.erl); \
-        /opt/rabbitmq/sbin/rabbitmqctl eval \"$expr\"; \
-        rm -f /tmp/dune-mq-whisper.erl";
 
     let result = publisher
         .kubectl
@@ -260,7 +259,7 @@ pub async fn publish_whisper(
                 "--",
                 "sh",
                 "-lc",
-                shell,
+                RABBITMQ_EVAL_SHELL,
             ],
             Some(&erlang),
             30,
@@ -389,5 +388,25 @@ mod tests {
         assert!(s.contains("<<\"text_chat\">>"));
         assert!(s.contains("Sender"));
         assert!(s.contains("RoutingKey"));
+    }
+
+    #[test]
+    fn rabbitmq_eval_reads_stdin_without_shared_temp_files() {
+        assert!(RABBITMQ_EVAL_SHELL.contains("expr=$(cat)"));
+        assert!(!RABBITMQ_EVAL_SHELL.contains("/tmp/"));
+    }
+
+    #[tokio::test]
+    async fn cloned_publishers_share_serialization_lock() {
+        let kubectl = KubectlClient::new(false, None, None, None);
+        let publisher = MqPublisher::new(
+            kubectl.clone(),
+            ClusterCache::new(kubectl),
+            "test-token".to_string(),
+        );
+        let cloned = publisher.clone();
+
+        let _guard = publisher.publish_lock.lock().await;
+        assert!(cloned.publish_lock.try_lock().is_err());
     }
 }

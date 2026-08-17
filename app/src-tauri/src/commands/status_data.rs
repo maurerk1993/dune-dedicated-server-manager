@@ -871,7 +871,7 @@ mod tests {
     #[test]
     fn server_stats_use_partition_map_and_index_from_real_cr() {
         // Mirrors the actual Funcom operator status.servers[] shape captured
-        // from a live BattleGroup CR backup. Pre-fix the map column showed
+        // from a live BattleGroup CR snapshot. Pre-fix the map column showed
         // "Game Server" for every row because we were reading `map`/`name`
         // instead of `partitionMap`.
         let value = bg(
@@ -917,7 +917,7 @@ mod tests {
 
     #[test]
     fn bg_start_timestamp_propagates_to_every_server_row_when_per_server_missing() {
-        // status.startTimestamp from the live CR backup is one minute in the
+        // status.startTimestamp from the live CR snapshot is one minute in the
         // past for this test.
         let one_min_ago = (chrono::Utc::now() - chrono::Duration::minutes(1))
             .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);

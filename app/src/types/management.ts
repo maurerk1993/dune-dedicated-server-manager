@@ -211,15 +211,8 @@ export type ScheduleConfig = {
   restartWarningFrequencySecs: number;
   restartWarningDurationSecs: number;
   restartTz: string;
-  /**
-   * Master switches for the daily restart and scheduled backups.
-   * Optional so older service builds (which omit them) read as undefined;
-   * callers should treat undefined as enabled (the default).
-   */
+  /** Optional so older service builds read as undefined; treat it as enabled. */
   restartEnabled?: boolean;
-  backupEnabled?: boolean;
-  /** null = scheduled backups disabled; otherwise the 5-field cron string. */
-  backupCron: string | null;
   welcomeMessageEnabled: boolean;
   welcomePackageEnabled: boolean;
   welcomePackageVersion: string;
@@ -238,9 +231,6 @@ export type ScheduleConfigUpdate = Partial<{
   restartWarningDurationSecs: number;
   restartTz: string;
   restartEnabled: boolean;
-  backupEnabled: boolean;
-  /** Empty string clears the cron (disables); non-empty validated server-side. */
-  backupCron: string;
   welcomeMessageEnabled: boolean;
   welcomePackageEnabled: boolean;
   welcomePackageVersion: string;
@@ -250,30 +240,6 @@ export type ScheduleConfigUpdate = Partial<{
   welcomeWhisperSourcePlayer: string;
   welcomeMessage: string;
 }>;
-
-export type CronPreviewResult =
-  | { ok: true; tz: string; next: string[] }
-  | { ok: false; error: string };
-
-export type DumpPruneItem = {
-  namespace: string;
-  name: string;
-  action: string;
-  backup: string | null;
-  phase: string;
-  createdAt: string;
-  ageDays: number;
-};
-
-export type DumpPruneTarget = {
-  namespace: string;
-  name: string;
-};
-
-export type DumpPruneResult = {
-  deleted: string[];
-  skipped: { namespace: string; name: string; reason: string }[];
-};
 
 export type PlayerLocationDto = {
   x: number;

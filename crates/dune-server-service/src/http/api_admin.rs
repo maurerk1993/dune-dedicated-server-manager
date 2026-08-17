@@ -187,7 +187,9 @@ pub async fn specialization(
         crate::postgres::resolve_admin_player_by_fls(&state.env.pg, &cluster.namespace, fls_id)
             .await?
     else {
-        return Err(ApiError::not_found(format!("player {fls_id} was not found")));
+        return Err(ApiError::not_found(format!(
+            "player {fls_id} was not found"
+        )));
     };
     let response =
         crate::postgres::get_player_specialization(&state.env.pg, &cluster.namespace, player)
@@ -223,7 +225,9 @@ pub async fn set_specialization_level(
         crate::postgres::resolve_admin_player_by_fls(&state.env.pg, &cluster.namespace, fls_id)
             .await?
     else {
-        return Err(ApiError::not_found(format!("player {fls_id} was not found")));
+        return Err(ApiError::not_found(format!(
+            "player {fls_id} was not found"
+        )));
     };
     if crate::postgres::is_player_online(&player.online) {
         return Err(ApiError::bad_request(format!(
@@ -280,12 +284,10 @@ pub async fn set_specialization_level(
         }
     };
 
-    let _ = state.store.record_admin_command(
-        "SpecializationLevelXp.Set",
-        &inner,
-        ok,
-        error.as_deref(),
-    );
+    let _ =
+        state
+            .store
+            .record_admin_command("SpecializationLevelXp.Set", &inner, ok, error.as_deref());
 
     Ok(Json(json!({
         "ok": ok,
@@ -337,7 +339,9 @@ pub async fn grant_quality_item(
         crate::postgres::resolve_admin_player_by_fls(&state.env.pg, &cluster.namespace, fls_id)
             .await?
     else {
-        return Err(ApiError::not_found(format!("player {fls_id} was not found")));
+        return Err(ApiError::not_found(format!(
+            "player {fls_id} was not found"
+        )));
     };
     if crate::postgres::is_player_online(&player.online) {
         return Err(ApiError::bad_request(format!(
@@ -508,11 +512,12 @@ pub async fn retry_welcome_grant(
     if package_version.is_empty() {
         return Err(ApiError::bad_request("packageVersion must not be empty"));
     }
-    let removed =
-        state
-            .store
-            .delete_welcome_grant(player_id, package_version, req.account_id)?;
-    Ok(Json(serde_json::json!({ "ok": removed > 0, "removed": removed })))
+    let removed = state
+        .store
+        .delete_welcome_grant(player_id, package_version, req.account_id)?;
+    Ok(Json(
+        serde_json::json!({ "ok": removed > 0, "removed": removed }),
+    ))
 }
 
 #[derive(Debug, Deserialize)]
