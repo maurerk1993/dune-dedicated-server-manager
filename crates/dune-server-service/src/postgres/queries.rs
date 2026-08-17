@@ -643,9 +643,7 @@ pub fn plan_quality_item_grant(
     quantity: i64,
 ) -> Result<QualityGrantPlan> {
     if !(1..=MAX_QUALITY_GRANT_QUANTITY).contains(&quantity) {
-        return Err(anyhow!(
-            "quantity must be 1..={MAX_QUALITY_GRANT_QUANTITY}"
-        ));
+        return Err(anyhow!("quantity must be 1..={MAX_QUALITY_GRANT_QUANTITY}"));
     }
 
     let Some(max_stack_size) = quality_grant_stack_max(stack_max) else {
@@ -732,7 +730,10 @@ pub async fn grant_quality_items_to_backpack(
     let slot_limit = plan.insert_stack_sizes.len() as i64;
     let slot_rows = if slot_limit > 0 {
         let rows = tx
-            .query(PLAYER_BACKPACK_FREE_SLOTS_SQL, &[&inventory_id, &slot_limit])
+            .query(
+                PLAYER_BACKPACK_FREE_SLOTS_SQL,
+                &[&inventory_id, &slot_limit],
+            )
             .await
             .context("finding free backpack slots")?;
         if rows.len() != plan.insert_stack_sizes.len() {
@@ -868,7 +869,10 @@ mod tests {
     #[test]
     fn specialization_track_validation_is_case_insensitive() {
         assert_eq!(canonical_specialization_track("combat"), Some("Combat"));
-        assert_eq!(canonical_specialization_track(" Sabotage "), Some("Sabotage"));
+        assert_eq!(
+            canonical_specialization_track(" Sabotage "),
+            Some("Sabotage")
+        );
         assert_eq!(canonical_specialization_track("Mentat"), None);
     }
 

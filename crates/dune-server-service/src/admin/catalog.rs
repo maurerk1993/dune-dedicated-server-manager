@@ -153,12 +153,7 @@ pub fn diff_active_catalog(
 ) -> Result<(CatalogDiff, Vec<Item>)> {
     let active = active_catalog(store)?;
     let candidate_items = parse_and_validate_catalog_value(candidate)?;
-    let diff = diff_catalog(
-        &active.items,
-        &candidate_items,
-        source_url,
-        source_version,
-    );
+    let diff = diff_catalog(&active.items, &candidate_items, source_url, source_version);
     Ok((diff, candidate_items))
 }
 
@@ -379,11 +374,7 @@ fn reject_unknown_keys(
 ) -> Result<()> {
     for key in obj.keys() {
         if !allowed.contains(key.as_str()) {
-            return Err(anyhow!(
-                "catalog row {} has unknown field {}",
-                idx + 1,
-                key
-            ));
+            return Err(anyhow!("catalog row {} has unknown field {}", idx + 1, key));
         }
     }
     Ok(())
@@ -398,13 +389,19 @@ fn validate_item(item: &Item, idx: usize) -> Result<()> {
         return Err(anyhow!("catalog row {row} ({}) has empty name", item.id));
     }
     if item.category.trim().is_empty() {
-        return Err(anyhow!("catalog row {row} ({}) has empty category", item.id));
+        return Err(anyhow!(
+            "catalog row {row} ({}) has empty category",
+            item.id
+        ));
     }
     if item.source.trim().is_empty() {
         return Err(anyhow!("catalog row {row} ({}) has empty source", item.id));
     }
     if item.tier == Some(0) {
-        return Err(anyhow!("catalog row {row} ({}) has invalid tier 0", item.id));
+        return Err(anyhow!(
+            "catalog row {row} ({}) has invalid tier 0",
+            item.id
+        ));
     }
     if item.stack_max == Some(0) {
         return Err(anyhow!(
@@ -434,7 +431,9 @@ fn validate_sentinel_items(items: &[Item]) -> Result<()> {
     }
 
     let Some(aluminum) = data::find_item_in(items, "AluminiumBar") else {
-        return Err(anyhow!("sentinel item AluminiumBar is missing from catalog"));
+        return Err(anyhow!(
+            "sentinel item AluminiumBar is missing from catalog"
+        ));
     };
     if aluminum.stack_max != Some(500) {
         return Err(anyhow!("sentinel item AluminiumBar lost stackMax 500"));

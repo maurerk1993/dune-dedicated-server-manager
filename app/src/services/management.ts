@@ -3,10 +3,6 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   ClusterDto,
   CommandSpec,
-  CronPreviewResult,
-  DumpPruneItem,
-  DumpPruneResult,
-  DumpPruneTarget,
   HealthDto,
   HistoryDto,
   ItemCatalogCheckDto,
@@ -92,12 +88,6 @@ export const managementApi = {
   setConfig: (tunnelId: string, config: ScheduleConfigUpdate) =>
     invoke<{ ok: boolean }>("ms_set_config", { tunnelId, config }),
   listTimezones: (tunnelId: string) => invoke<string[]>("ms_list_timezones", { tunnelId }),
-  cronPreview: (tunnelId: string, expr: string, count?: number) =>
-    invoke<CronPreviewResult>("ms_cron_preview", { tunnelId, expr, count }),
-  dumpPrunePreview: (tunnelId: string) =>
-    invoke<DumpPruneItem[]>("ms_dump_prune_preview", { tunnelId }),
-  dumpPruneExecute: (tunnelId: string, items: DumpPruneTarget[]) =>
-    invoke<DumpPruneResult>("ms_dump_prune_execute", { tunnelId, items }),
   searchPlayers: (tunnelId: string, q: string, limit?: number) =>
     invoke<PlayerDto[]>("ms_search_players", { tunnelId, q, limit }),
   playerLocation: (tunnelId: string, flsId: string) =>

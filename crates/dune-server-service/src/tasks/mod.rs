@@ -6,7 +6,6 @@ use crate::admin::MqPublisher;
 use crate::kubectl::{BattlegroupCli, ClusterCache, KubectlClient};
 use crate::postgres::PgClient;
 
-pub mod backup;
 pub mod restart;
 pub mod restart_notice;
 pub mod welcome_package;
@@ -24,10 +23,6 @@ pub struct TaskEnv {
     /// broadcast. Defaults to true; existing installs (no stored row) keep the
     /// prior always-on behavior.
     pub restart_enabled: bool,
-    /// Master switch for scheduled backups. Defaults to true, but backups also
-    /// require `backup_cron` to be set — this flag lets an operator pause the
-    /// cadence without discarding their cron expression.
-    pub backup_enabled: bool,
     /// Restart-notice + restart wall-clock target (default 05:00).
     pub restart_hour: u32,
     pub restart_minute: u32,
@@ -35,15 +30,6 @@ pub struct TaskEnv {
     pub restart_warning_frequency_secs: u64,
     pub restart_warning_duration_secs: u64,
     pub restart_tz: Tz,
-    /// Operator-supplied cron expression that drives automatic battlegroup
-    /// backups, evaluated in `restart_tz`. `None` disables the scheduled
-    /// backup loop; manual triggers via `/api/tasks/trigger` still run.
-    /// Defaults to None — operators opt in to a cadence that suits their
-    /// player traffic, since vendor backups stall server I/O.
-    pub backup_cron: Option<cron::Schedule>,
-    /// User-typed form of the cron expression, kept verbatim so the UI
-    /// echoes exactly what the operator entered.
-    pub backup_cron_raw: Option<String>,
     /// Enables the opt-in new-player welcome-package worker.
     pub welcome_package_enabled: bool,
     /// Enables the welcome whisper worker independently from item/package
@@ -68,8 +54,8 @@ pub struct TaskEnv {
 /// All task implementations registered for the scheduler.
 pub fn build_all(env: Arc<TaskEnv>) -> Vec<Arc<dyn crate::scheduler::Task>> {
     vec![
-        Arc::new(backup::BackupTask::new(env.clone())) as Arc<dyn crate::scheduler::Task>,
-        Arc::new(restart_notice::RestartNoticeTask::new(env.clone())),
+        Arc::new(restart_notice::RestartNoticeTask::new(env.clone()))
+            as Arc<dyn crate::scheduler::Task>,
         Arc::new(restart::RestartTask::new(env.clone())),
         Arc::new(welcome_package::WelcomePackageTask::new(env.clone())),
         Arc::new(welcome_package::WelcomeMessageTask::new(env)),

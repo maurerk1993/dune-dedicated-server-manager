@@ -229,7 +229,10 @@ impl Task for WelcomePackageTask {
                     )?;
                     ctx.log_warn(&format!(
                         "welcome package failed player={} account_id={} version={} error={}",
-                        account.fls_id, account.account_id, ctx.env.welcome_package_version, scrubbed
+                        account.fls_id,
+                        account.account_id,
+                        ctx.env.welcome_package_version,
+                        scrubbed
                     ))?;
                     acted = true;
                 }
@@ -820,7 +823,10 @@ mod tests {
         // A weapon is not a fillable container.
         assert!(stats.get("FFillableItemStats").is_none());
         // Non-fillable items carry an empty customization block.
-        assert!(stats["FCustomizationStats"][0].as_array().unwrap().is_empty());
+        assert!(stats["FCustomizationStats"][0]
+            .as_array()
+            .unwrap()
+            .is_empty());
         assert!(stats["FCustomizationStats"][1]
             .as_object()
             .unwrap()

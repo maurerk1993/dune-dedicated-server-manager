@@ -6,34 +6,6 @@ use super::flow_models::{
 pub(super) fn extended_command_specs() -> Vec<BattlegroupCommandSpec> {
     vec![
         BattlegroupCommandSpec::new(
-            BattlegroupCommand::BackupDatabase,
-            "backup",
-            "Take a database backup",
-            vec![step(
-                "bg.database.backup",
-                "Take database backup",
-                StepDomain::Kubernetes,
-                StepAction::Export,
-                "/home/dune/.dune/bin/battlegroup backup",
-                "Future native database backup workflow",
-                StepFlags::new(false, true),
-            )],
-        ),
-        BattlegroupCommandSpec::new(
-            BattlegroupCommand::ImportDatabase,
-            "import",
-            "Import a database backup",
-            vec![step(
-                "bg.database.import",
-                "Import database backup",
-                StepDomain::Kubernetes,
-                StepAction::Import,
-                "/home/dune/.dune/bin/battlegroup import",
-                "Future guarded native database import workflow",
-                StepFlags::new(false, true),
-            )],
-        ),
-        BattlegroupCommandSpec::new(
             BattlegroupCommand::LogsExport,
             "logs-export",
             "Retrieves logs from all pods in the selected battlegroup",

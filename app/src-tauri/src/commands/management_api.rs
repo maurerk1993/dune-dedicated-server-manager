@@ -507,47 +507,6 @@ pub async fn ms_list_timezones(
 }
 
 #[tauri::command]
-pub async fn ms_cron_preview(
-    app: tauri::AppHandle,
-    registry: tauri::State<'_, TunnelRegistry>,
-    tunnel_id: String,
-    expr: String,
-    count: Option<u32>,
-) -> Result<Value, String> {
-    let port = tunnel_local_port(&registry, &tunnel_id)?;
-    let client = ensure_client(&app);
-    let mut path = format!("/api/cron/preview?expr={}", urlencoding(&expr));
-    if let Some(c) = count {
-        path.push_str(&format!("&count={c}"));
-    }
-    get_json(&client, port, &path).await
-}
-
-#[tauri::command]
-pub async fn ms_dump_prune_preview(
-    app: tauri::AppHandle,
-    registry: tauri::State<'_, TunnelRegistry>,
-    tunnel_id: String,
-) -> Result<Value, String> {
-    let port = tunnel_local_port(&registry, &tunnel_id)?;
-    let client = ensure_client(&app);
-    get_json(&client, port, "/api/maintenance/dump-prune").await
-}
-
-#[tauri::command]
-pub async fn ms_dump_prune_execute(
-    app: tauri::AppHandle,
-    registry: tauri::State<'_, TunnelRegistry>,
-    tunnel_id: String,
-    items: Value,
-) -> Result<Value, String> {
-    let port = tunnel_local_port(&registry, &tunnel_id)?;
-    let client = ensure_client(&app);
-    let body = serde_json::json!({ "items": items });
-    post_json(&client, port, "/api/maintenance/dump-prune", &body).await
-}
-
-#[tauri::command]
 pub async fn ms_history(
     app: tauri::AppHandle,
     registry: tauri::State<'_, TunnelRegistry>,

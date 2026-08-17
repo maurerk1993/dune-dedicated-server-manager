@@ -41,12 +41,6 @@ impl BattlegroupCli {
         let result = run_process(&bin, &["restart"], None, 1200).await?;
         result.require_ok("battlegroup restart")
     }
-
-    pub async fn backup(&self, backup_name: &str) -> Result<()> {
-        let bin = self.bin_str();
-        let result = run_process(&bin, &["backup", backup_name], None, 600).await?;
-        result.require_ok(&format!("battlegroup backup {backup_name}"))
-    }
 }
 
 /// Wait for the battlegroup to reach a fully stopped state: `spec.stop=true`
