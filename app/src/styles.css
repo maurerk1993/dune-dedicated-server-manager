@@ -1121,6 +1121,193 @@ body {
   margin-top: 4px;
 }
 
+/* Maps tab */
+.maps-snapshot-warning {
+  padding: 11px 14px;
+  border: 1px solid rgba(212, 168, 94, 0.3);
+  border-radius: var(--radius-2);
+  background: var(--color-warn-dim);
+  color: var(--color-text-secondary);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.maps-snapshot-warning strong {
+  color: var(--color-warn);
+  font-weight: 600;
+}
+
+.maps-snapshot-warning[data-tone="err"] {
+  border-color: rgba(214, 105, 94, 0.35);
+  background: var(--color-err-dim);
+}
+
+.maps-snapshot-warning[data-tone="err"] strong {
+  color: var(--color-err);
+}
+
+.map-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 10px;
+}
+
+.map-card {
+  display: grid;
+  grid-template-columns: 3px minmax(0, 1fr);
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border-hair);
+  border-radius: var(--radius-3);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.014), transparent 38%),
+    var(--color-bg-elevated);
+}
+
+.map-card-rail {
+  background: var(--color-text-faint);
+}
+
+.map-card[data-tone="ok"] .map-card-rail {
+  background: var(--color-ok);
+}
+
+.map-card[data-tone="warn"] .map-card-rail {
+  background: var(--color-warn);
+}
+
+.map-card[data-tone="err"] .map-card-rail {
+  background: var(--color-err);
+}
+
+.map-card-content {
+  min-width: 0;
+  padding: 14px;
+}
+
+.map-card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.map-card-title-wrap {
+  min-width: 0;
+}
+
+.map-card-title {
+  margin: 0;
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-card-identity {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-card-heading .status-pill {
+  flex: 0 0 auto;
+  max-width: 52%;
+  padding: 3px 8px;
+  font-size: 9px;
+  line-height: 1.25;
+  text-align: left;
+}
+
+.map-card-highlights {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 13px;
+  overflow: hidden;
+  border: 1px solid var(--color-border-hair);
+  border-radius: var(--radius-2);
+  background: var(--color-border-hair);
+}
+
+.map-card-datum {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px 9px;
+  background: var(--color-bg-panel);
+}
+
+.map-card-datum span,
+.map-card-telemetry dt {
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.map-card-datum strong {
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-card-datum[data-prominent="true"] strong {
+  color: var(--color-accent-strong);
+  font-size: 15px;
+}
+
+.map-card-telemetry {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 14px;
+  margin: 13px 0 0;
+}
+
+.map-card-telemetry > div {
+  min-width: 0;
+}
+
+.map-card-telemetry dd {
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-card-reporter {
+  margin-top: 12px;
+  padding-top: 9px;
+  overflow: hidden;
+  border-top: 1px solid var(--color-border-hair);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.maps-guide .dashboard-section-subtitle {
+  max-width: 920px;
+}
+
 /* Metric grid */
 .metric-grid {
   display: grid;
@@ -2027,6 +2214,18 @@ button:disabled,
     grid-template-columns: minmax(0, 1fr) 92px 56px;
     gap: var(--space-2);
     padding-inline: 9px;
+  }
+  .map-card-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .map-card-heading {
+    flex-direction: column;
+  }
+  .map-card-heading .status-pill {
+    max-width: 100%;
+  }
+  .map-card-highlights {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

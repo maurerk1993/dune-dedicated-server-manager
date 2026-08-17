@@ -15,6 +15,7 @@ import ActionButton from "../ui/ActionButton";
 import StatusPill from "../ui/StatusPill";
 import ServerAutoRefreshControl from "./ServerAutoRefreshControl";
 import ServerDashboard from "./ServerDashboard";
+import ServerMaps from "./ServerMaps";
 import ServerPods from "./ServerPods";
 import AdminTab, { type AdminTabPrefill } from "../management/AdminTab";
 import AutomatedTasksTab from "../management/AutomatedTasksTab";
@@ -150,6 +151,7 @@ export default function ServerDetailPage(props: ServerDetailPageProps) {
         >
           <Tabs.List size="2" color="bronze">
             <Tabs.Trigger value="dashboard">Dashboard</Tabs.Trigger>
+            <Tabs.Trigger value="maps">Maps</Tabs.Trigger>
             <Tabs.Trigger value="pods">Pods</Tabs.Trigger>
             {managementReady ? (
               <>
@@ -180,6 +182,15 @@ export default function ServerDetailPage(props: ServerDetailPageProps) {
               onStartCustomTunnel={onStartCustomTunnel}
               onStopTunnel={onStopTunnel}
               onOpenTunnel={onOpenTunnel}
+            />
+          </Tabs.Content>
+          <Tabs.Content value="maps" className="server-detail-tab-content">
+            <ServerMaps
+              status={status}
+              statusError={statusError}
+              busyLabel={busyLabel}
+              onStartBattlegroup={onStartBattlegroup}
+              onStopBattlegroup={onStopBattlegroup}
             />
           </Tabs.Content>
           <Tabs.Content value="pods" className="server-detail-tab-content">
