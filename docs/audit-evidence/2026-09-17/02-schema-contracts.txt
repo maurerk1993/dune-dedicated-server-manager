@@ -1,0 +1,139 @@
+type|actorstate|e|Default, Travel, VehicleBackup, AbortedAuthorityTransfer, VehicleRecovery, BaseBackup, SimulatedLandsraadActor
+type|characterstate|e|Active, Deleted
+type|markerpayloadtype|e|Default, Permissions, Contract, StaticLocation, SocialPlayer, DuneMap, Story, LandsraadContract, BaseBackup
+type|playerconnectionstatus|e|Offline, LoggingOut, Online
+type|playerlifestate|e|Alive, Dead, DeadByCoriolis, DeadBySandworm
+type|specializationtracktype|e|Invalid, Crafting, Gathering, Exploration, Combat, Sabotage, Count
+type|transform|c|
+type|vector|c|
+composite_field|quaternion|x|double precision
+composite_field|quaternion|y|double precision
+composite_field|quaternion|z|double precision
+composite_field|quaternion|w|double precision
+composite_field|transform|location|dune.vector
+composite_field|transform|rotation|dune.quaternion
+composite_field|vector|x|double precision
+composite_field|vector|y|double precision
+composite_field|vector|z|double precision
+column|actor_inventories|inventory_id|bigint|t|
+column|actor_inventories|component_name_hash|bigint|t|
+column|applied_patches|name|text|t|
+column|applied_patches|date|timestamp without time zone|t|
+column|encrypted_player_state|account_id|bigint|t|
+column|encrypted_player_state|encrypted_character_name|bytea|t|
+column|encrypted_player_state|last_avatar_activity|timestamp with time zone|f|
+column|encrypted_player_state|server_id|text|f|
+column|encrypted_player_state|player_controller_id|bigint|f|
+column|encrypted_player_state|player_pawn_id|bigint|f|
+column|encrypted_player_state|player_state_id|bigint|f|
+column|encrypted_player_state|pending_respawn_location_id|uuid|f|
+column|encrypted_player_state|life_state|dune.playerlifestate|t|'Alive'::dune.playerlifestate
+column|encrypted_player_state|online_status|dune.playerconnectionstatus|t|'Offline'::dune.playerconnectionstatus
+column|encrypted_player_state|reconnect_grace_period_end|timestamp without time zone|f|
+column|encrypted_player_state|previous_server_partition_id|bigint|f|
+column|encrypted_player_state|is_coriolis_processed|boolean|t|true
+column|encrypted_player_state|return_dimension_index|integer|f|
+column|encrypted_player_state|death_location|dune.deathlocation|f|
+column|encrypted_player_state|home_dimension_index|integer|f|
+column|encrypted_player_state|logoff_persistence_end_time|timestamp without time zone|f|
+column|encrypted_player_state|last_login_time|timestamp with time zone|f|
+column|encrypted_player_state|last_returning_player_event_time|timestamp with time zone|f|
+column|encrypted_player_state|last_returning_player_awarded_time|timestamp with time zone|f|
+column|encrypted_player_state|id|bigint|t|nextval('dune.encrypted_player_state_id_seq'::regclass)
+column|encrypted_player_state|character_state|dune.characterstate|t|'Active'::dune.characterstate
+column|encrypted_player_state|last_character_state_change|timestamp without time zone|t|now()
+column|encrypted_player_state|transfer_count|integer|t|0
+column|inventories|id|bigint|t|nextval('dune.inventories_id_seq'::regclass)
+column|inventories|actor_id|bigint|f|
+column|inventories|exchange_id|bigint|f|
+column|inventories|item_id|bigint|f|
+column|inventories|vehicle_module_id|bigint|f|
+column|inventories|inventory_type|integer|f|
+column|inventories|max_item_count|integer|f|
+column|inventories|max_item_volume|real|f|
+column|items|id|bigint|t|nextval('dune.items_id_seq'::regclass)
+column|items|inventory_id|bigint|f|
+column|items|stack_size|bigint|t|
+column|items|position_index|bigint|t|
+column|items|template_id|text|t|
+column|items|is_new|boolean|f|true
+column|items|acquisition_time|bigint|t|0
+column|items|stats|jsonb|t|
+column|items|quality_level|bigint|t|0
+column|items|volume_override|real|f|
+column|purchased_specialization_keystones|player_id|bigint|t|
+column|purchased_specialization_keystones|keystone_id|smallint|t|
+constraint|actor_inventories|actor_inventories_inventory_id_fkey|f|FOREIGN KEY (inventory_id) REFERENCES dune.inventories(id) ON DELETE CASCADE
+constraint|actors|actors_id_check|c|CHECK ((id > 0))
+constraint|actors|actors_pkey|p|PRIMARY KEY (id)
+constraint|actors|partition_id_fk|f|FOREIGN KEY (partition_id) REFERENCES dune.world_partition(partition_id) ON DELETE SET NULL
+constraint|applied_patches|applied_patches_name_key|u|UNIQUE (name)
+constraint|encrypted_player_state|encrypted_player_state_account_id_fkey|f|FOREIGN KEY (account_id) REFERENCES dune.encrypted_accounts(id) ON UPDATE CASCADE ON DELETE CASCADE
+constraint|encrypted_player_state|encrypted_player_state_pkey|p|PRIMARY KEY (id)
+constraint|encrypted_player_state|encrypted_player_state_player_controller_id_fkey|f|FOREIGN KEY (player_controller_id) REFERENCES dune.actors(id) ON DELETE SET NULL
+constraint|encrypted_player_state|encrypted_player_state_player_pawn_id_fkey|f|FOREIGN KEY (player_pawn_id) REFERENCES dune.actors(id) ON DELETE SET NULL
+constraint|encrypted_player_state|encrypted_player_state_player_state_id_fkey|f|FOREIGN KEY (player_state_id) REFERENCES dune.actors(id) ON DELETE SET NULL
+constraint|inventories|inventories_actor_id_fkey|f|FOREIGN KEY (actor_id) REFERENCES dune.actors(id) ON DELETE CASCADE
+constraint|inventories|inventories_exchange_id_fkey|f|FOREIGN KEY (exchange_id) REFERENCES dune.dune_exchanges(id) ON DELETE CASCADE
+constraint|inventories|inventories_id_check|c|CHECK ((id > 0))
+constraint|inventories|inventories_item_id_fkey|f|FOREIGN KEY (item_id) REFERENCES dune.items(id) ON DELETE CASCADE
+constraint|inventories|inventories_pkey|p|PRIMARY KEY (id)
+constraint|inventories|inventories_vehicle_module_id_fkey|f|FOREIGN KEY (vehicle_module_id) REFERENCES dune.vehicle_modules(id) ON DELETE CASCADE
+constraint|inventories|valid_fkey|c|CHECK (((actor_id IS NOT NULL) OR (exchange_id IS NOT NULL) OR (item_id IS NOT NULL) OR (vehicle_module_id IS NOT NULL)))
+constraint|items|items_inventory_id_fkey|f|FOREIGN KEY (inventory_id) REFERENCES dune.inventories(id) ON DELETE CASCADE
+constraint|items|items_pkey|p|PRIMARY KEY (id)
+constraint|items|items_position_index_check|c|CHECK ((position_index >= 0))
+constraint|items|items_stack_size_check|c|CHECK ((stack_size > 0))
+constraint|journey_story_node|journey_story_node_character_id_fkey|f|FOREIGN KEY (character_id) REFERENCES dune.encrypted_player_state(id) ON UPDATE CASCADE ON DELETE CASCADE
+constraint|journey_story_node|journey_story_node_pkey|p|PRIMARY KEY (character_id, story_node_id)
+constraint|journey_story_node_cooldown|journey_story_node_cooldown_character_id_fkey|f|FOREIGN KEY (character_id) REFERENCES dune.encrypted_player_state(id) ON UPDATE CASCADE ON DELETE CASCADE
+constraint|markers|markers_map_name_id_fkey|f|FOREIGN KEY (map_name_id) REFERENCES dune.map_names(map_name_id) ON DELETE CASCADE
+constraint|markers|markers_pkey|p|PRIMARY KEY (marker_hash_id, dimension_index, map_name_id)
+constraint|player_markers|player_markers_marker_hash_id_dimension_index_map_name_id_fkey|f|FOREIGN KEY (marker_hash_id, dimension_index, map_name_id) REFERENCES dune.markers(marker_hash_id, dimension_index, map_name_id) ON DELETE CASCADE
+constraint|player_markers|player_markers_pkey|p|PRIMARY KEY (player_id, marker_hash_id, dimension_index, map_name_id)
+constraint|player_markers|player_markers_player_id_fkey|f|FOREIGN KEY (player_id) REFERENCES dune.actors(id) ON DELETE CASCADE
+constraint|purchased_specialization_keystones|purchased_specialization_keystones_keystone_id_fkey|f|FOREIGN KEY (keystone_id) REFERENCES dune.specialization_keystones_map(id) ON DELETE CASCADE
+constraint|purchased_specialization_keystones|purchased_specialization_keystones_pkey|p|PRIMARY KEY (player_id, keystone_id)
+constraint|purchased_specialization_keystones|purchased_specialization_keystones_player_id_fkey|f|FOREIGN KEY (player_id) REFERENCES dune.actors(id) ON DELETE CASCADE
+constraint|specialization_tracks|specialization_tracks_pkey|p|PRIMARY KEY (player_id, track_type)
+constraint|specialization_tracks|specialization_tracks_player_id_fkey|f|FOREIGN KEY (player_id) REFERENCES dune.actors(id) ON DELETE CASCADE
+index|actor_inventories|CREATE INDEX actor_inventories_inventory_id_fk_idx ON dune.actor_inventories USING btree (inventory_id)
+index|actor_inventories|CREATE INDEX inventory_component_name_hash_idx ON dune.actor_inventories USING btree (component_name_hash)
+index|actors|CREATE UNIQUE INDEX actors_pkey ON dune.actors USING btree (id)
+index|actors|CREATE INDEX actors_owner_account_id_idx ON dune.actors USING btree (((owner_account_id IS NULL)))
+index|actors|CREATE INDEX actors_map_dimension_ownerless_idx ON dune.actors USING btree (map, dimension_index) WHERE (owner_account_id IS NULL)
+index|applied_patches|CREATE UNIQUE INDEX applied_patches_name_key ON dune.applied_patches USING btree (name)
+index|encrypted_player_state|CREATE UNIQUE INDEX encrypted_player_state_pkey ON dune.encrypted_player_state USING btree (id)
+index|encrypted_player_state|CREATE INDEX encrypted_player_state_account_id_idx ON dune.encrypted_player_state USING btree (account_id)
+index|encrypted_player_state|CREATE INDEX encrypted_player_state_player_controller_id_idx ON dune.encrypted_player_state USING btree (player_controller_id)
+index|encrypted_player_state|CREATE INDEX encrypted_player_state_reconnect_grace_period_end_idx ON dune.encrypted_player_state USING btree (reconnect_grace_period_end)
+index|encrypted_player_state|CREATE INDEX encrypted_player_state_player_pawn_id_fk_idx ON dune.encrypted_player_state USING btree (player_pawn_id)
+index|encrypted_player_state|CREATE INDEX encrypted_player_state_player_state_id_fk_idx ON dune.encrypted_player_state USING btree (player_state_id)
+index|encrypted_player_state|CREATE INDEX encrypted_player_state_logoff_persistence_expiry_time_idx ON dune.encrypted_player_state USING btree (logoff_persistence_end_time)
+index|encrypted_player_state|CREATE INDEX encrypted_player_state_character_state_idx ON dune.encrypted_player_state USING btree (character_state)
+index|encrypted_player_state|CREATE INDEX encrypted_player_state_pending_respawn_idx ON dune.encrypted_player_state USING btree (pending_respawn_location_id) WHERE (pending_respawn_location_id IS NOT NULL)
+index|encrypted_player_state|CREATE INDEX encrypted_player_state_character_name_gin ON dune.encrypted_player_state USING gin (dune.decrypt_user_data(encrypted_character_name) ext.gin_trgm_ops)
+index|inventories|CREATE UNIQUE INDEX inventories_pkey ON dune.inventories USING btree (id)
+index|inventories|CREATE INDEX inventory_actor_id_idx ON dune.inventories USING btree (actor_id)
+index|inventories|CREATE INDEX inventory_item_id_idx ON dune.inventories USING hash (item_id)
+index|inventories|CREATE INDEX idx_item_id ON dune.inventories USING btree (item_id)
+index|items|CREATE UNIQUE INDEX items_pkey ON dune.items USING btree (id)
+index|items|CREATE INDEX item_inventory_id_idx ON dune.items USING hash (inventory_id)
+index|items|CREATE INDEX idx_inventory_id ON dune.items USING btree (inventory_id)
+index|purchased_specialization_keystones|CREATE UNIQUE INDEX purchased_specialization_keystones_pkey ON dune.purchased_specialization_keystones USING btree (player_id, keystone_id)
+index|specialization_tracks|CREATE UNIQUE INDEX specialization_tracks_pkey ON dune.specialization_tracks USING btree (player_id, track_type)
+function_signature|check_actor_state|in_actor_id bigint, in_expected_state dune.actorstate|boolean|v|sql
+function_signature|delete_actor_state|in_actor_id bigint|void|v|sql
+function_signature|delete_actor_states_travel|in_actor_id bigint|void|v|sql
+function_signature|delete_markers_by_id|in_marker_ids integer[]|void|v|plpgsql
+function_signature|delete_markers_by_static_location_key|p_location_key text|void|v|plpgsql
+function_signature|delete_markers_for_all_players|in_marker_types_to_keep text[], in_map text|void|v|plpgsql
+function_signature|delete_markers_return_actor_ids|in_dimension_index integer, in_map_name text, in_marker_ids integer[]|TABLE(actor_id bigint, marker_id integer)|v|plpgsql
+function_signature|delete_static_location_markers|p_location_keys text[]|void|v|plpgsql
+function_signature|get_actor_state|in_actor_id bigint|dune.actorstate|v|sql
+function_signature|load_markers|in_player_id bigint, in_dimension_id integer, in_map_name text|SETOF dune.mapmarker|v|sql
+function_signature|permission_actor_create_or_update_base_marker|in_actor_id bigint, in_player_id bigint, in_rank smallint|void|v|plpgsql
+function_signature|permission_actor_update_marker_location|in_actor_id bigint, in_location_x real, in_location_y real, in_location_z real|void|v|plpgsql
+function_signature|set_specialization_xp_and_level|in_player_id bigint, in_track_type dune.specializationtracktype, in_xp_amount integer, in_level real|void|v|sql
+function_signature|update_marker_ids|in_old_ids integer[], in_new_ids integer[]|void|v|plpgsql
+function_signature|update_markers|in_map text, in_dimension_index integer, in_shared_markers_to_add dune.mapmarkersharedsave[], in_player_markers_to_add dune.mapmarkerplayersave[], in_player_markers_to_delete dune.mapmarkerplayerdelete[]|void|v|sql

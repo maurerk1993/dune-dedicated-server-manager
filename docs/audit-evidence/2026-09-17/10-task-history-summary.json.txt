@@ -1,0 +1,4 @@
+{
+  "SampleSize": 0,
+  "PropertyNames": "Length,LongLength,Rank,SyncRoot,IsReadOnly,IsFixedSize,IsSynchronized,Count"
+}

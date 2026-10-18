@@ -1,0 +1,11 @@
+{
+  "publicArchive": true,
+  "note": "Host health timestamps and automation settings omitted.",
+  "catalog": {
+    "source": "bundled",
+    "itemCount": 2558,
+    "gradeableCount": 378,
+    "stackableCount": 106,
+    "catalogHash": "3c60472aa9b989a2"
+  }
+}
