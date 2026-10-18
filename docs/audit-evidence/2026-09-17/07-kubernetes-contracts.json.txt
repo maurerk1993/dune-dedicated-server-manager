@@ -1,0 +1,12 @@
+{
+  "publicArchive": true,
+  "note": "Instance rows, counts, utilization, timestamps and assigned ports omitted.",
+  "contractFields": {
+    "battlegroup": ["phase", "databasePhase", "directorPhase", "serverGroupPhase", "stop"],
+    "server": ["partitionMap", "phase", "ready", "dimensionIndex", "restarts", "gamePort", "igwPort"],
+    "area": ["bounds", "dimension", "map", "partition", "sietch"],
+    "runtime": ["gamePhase", "players", "ready", "sfps"],
+    "servicePort": ["name", "port", "targetPort", "nodePort"]
+  },
+  "observedServiceTypes": ["NodePort", "ClusterIP"]
+}

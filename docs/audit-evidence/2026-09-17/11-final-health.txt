@@ -1,0 +1,4 @@
+Public archive summary: no health degradation was observed during the audit.
+Host timestamps, load, memory, pod counts and per-container restart counts are
+omitted. This historical summary is not a current health check or proof of zero
+impact. No production probes were repeated while preparing this public copy.

@@ -1,0 +1,84 @@
+view_definition|accounts| SELECT id,
+    "user",
+    dune.decrypt_user_data(encrypted_funcom_id) AS funcom_id,
+    takeoverable,
+    dune.decrypt_user_data(encrypted_platform_id) AS platform_id,
+    platform_name
+   FROM dune.encrypted_accounts;
+view_definition|player_state| SELECT account_id,
+    dune.decrypt_user_data(encrypted_character_name) AS character_name,
+    last_avatar_activity,
+    server_id,
+    player_controller_id,
+    player_pawn_id,
+    player_state_id,
+    pending_respawn_location_id,
+    life_state,
+    online_status,
+    reconnect_grace_period_end,
+    previous_server_partition_id,
+    is_coriolis_processed,
+    return_dimension_index,
+    death_location,
+    home_dimension_index,
+    logoff_persistence_end_time,
+    last_login_time,
+    last_returning_player_event_time,
+    last_returning_player_awarded_time,
+    id,
+    character_state,
+    last_character_state_change,
+    transfer_count
+   FROM dune.encrypted_player_state
+  WHERE character_state = '[literal]'::dune.characterstate;
+function_definition|check_actor_state|CREATE OR REPLACE FUNCTION dune.check_actor_state(in_actor_id bigint, in_expected_state dune.actorstate)
+ RETURNS boolean
+ LANGUAGE sql
+BEGIN ATOMIC
+ SELECT (NOT (actors.state IS DISTINCT FROM check_actor_state.in_expected_state))
+    FROM dune.actors
+   WHERE (actors.id = check_actor_state.in_actor_id);
+END
+
+function_definition|get_actor_state|CREATE OR REPLACE FUNCTION dune.get_actor_state(in_actor_id bigint)
+ RETURNS dune.actorstate
+ LANGUAGE sql
+BEGIN ATOMIC
+ SELECT actors.state
+    FROM dune.actors
+   WHERE (actors.id = get_actor_state.in_actor_id)
+  LIMIT 1;
+END
+
+function_definition|load_markers|CREATE OR REPLACE FUNCTION dune.load_markers(in_player_id bigint, in_dimension_id integer, in_map_name text)
+ RETURNS SETOF dune.mapmarker
+ LANGUAGE sql
+BEGIN ATOMIC
+ SELECT markers.marker_hash_id AS marker_id,
+     ROW(markers.marker_type, markers."position", markers.payload_type, markers.area_id, markers.area_radius, markers.long_range, markers.payload)::dune.mapmarkerstaticdata AS "row",
+     ROW(player_markers.discovery_level, player_markers.discovery_method, player_markers.payload)::dune.mapmarkerplayerdata AS "row"
+    FROM (dune.markers
+      JOIN dune.player_markers USING (marker_hash_id, dimension_index, map_name_id))
+   WHERE ((player_markers.player_id = load_markers.in_player_id) AND ((player_markers.dimension_index = load_markers.in_dimension_id) OR (player_markers.dimension_index = '-1'::integer)) AND (markers.map_name_id = ( SELECT map_names.map_name_id
+            FROM dune.map_names
+           WHERE (map_names.map_name = load_markers.in_map_name))));
+END
+
+function_definition|set_specialization_xp_and_level|CREATE OR REPLACE FUNCTION dune.set_specialization_xp_and_level(in_player_id bigint, in_track_type dune.specializationtracktype, in_xp_amount integer, in_level real)
+ RETURNS void
+ LANGUAGE sql
+BEGIN ATOMIC
+ INSERT INTO dune.specialization_tracks (player_id, track_type, xp_amount, level)
+   VALUES (set_specialization_xp_and_level.in_player_id, set_specialization_xp_and_level.in_track_type, set_specialization_xp_and_level.in_xp_amount, set_specialization_xp_and_level.in_level) ON CONFLICT(player_id, track_type) DO UPDATE SET xp_amount = set_specialization_xp_and_level.in_xp_amount, level = set_specialization_xp_and_level.in_level;
+END
+
+marker_composite_field|mapmarker|marker_id|integer
+marker_composite_field|mapmarker|shared_data|dune.mapmarkerstaticdata
+marker_composite_field|mapmarker|player_data|dune.mapmarkerplayerdata
+marker_composite_field|mapmarkerplayerdelete|marker_id|integer
+marker_composite_field|mapmarkerplayerdelete|player_id|bigint
+marker_composite_field|mapmarkerplayersave|marker_id|integer
+marker_composite_field|mapmarkerplayersave|player_id|bigint
+marker_composite_field|mapmarkerplayersave|player_data|dune.mapmarkerplayerdata
+marker_composite_field|mapmarkersharedsave|marker_id|integer
+marker_composite_field|mapmarkersharedsave|shared_data|dune.mapmarkerstaticdata

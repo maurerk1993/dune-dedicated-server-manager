@@ -1,0 +1,182 @@
+  IMAGE_PATTERN="(?<prefix>.*/seabass-server[^:]*:)(?<tag>[0-9]+-0-[a-zA-Z0-9_-]+)"
+  OPERATOR_IMAGE_PATTERN="(?<prefix>funcom\/self-hosting\/igw-k8s-(?<operator_type>[^:]+)-operator:)(?<tag>.+)"
+  
+> namespaces=( $(sudo kubectl get ns --no-headers -o custom-columns=NAME:.metadata.name | grep "^$BATTLEGROUP_PREFIX") )
+  bgname=${ns#$BATTLEGROUP_PREFIX}
+  
+  
+  print_usage() {
+      printf "    %-27s %s\n" "list" "Lists all available battlegroups"
+      printf "    %-27s %s\n" "status" "Shows the status of the selected battlegroup"
+>     printf "    %-27s %s\n" "start" "Starts the selected battlegroup"
+>     printf "    %-27s %s\n" "restart" "Restarts the selected battlegroup"
+>     printf "    %-27s %s\n" "stop" "Stops the selected battlegroup"
+      printf "    %-27s %s\n" "edit" "Edits the selected battlegroup resource with the bg-util interface"
+      printf "    %-27s %s\n" "edit-advanced" "Edits the selected battlegroup resource on the yaml file directly"
+      printf "    %-27s %s\n" "update" "Checks for new versions of servers, downloads them and applies them to the selected battlegroup"
+      printf "    %-27s %s\n" "change-battlegroup-ip" "Set the IP players connect to, then restart the battlegroup to apply it"
+      printf "    %-27s %s\n" "change-vm-ip" "Set how the VM itself gets its LAN IP (DHCP or a fixed static IP) in the /etc/network/interfaces file. Restarts networking"
+      printf "    %-27s %s\n" "update-from-downloads" "Updates the battlegroup to whatever version is currently downloaded on the steam folder"
+      printf "    %-27s %s\n" "backup [name]" "Dumps the selected battlegroup's database to /funcom/artifacts/database-dumps/<bg>/"
+  }
+  
+  select_battlegroup() {
+>         namespaces=( $(sudo kubectl get ns --no-headers -o custom-columns=NAME:.metadata.name | grep "^$BATTLEGROUP_PREFIX") )
+          if [ ${#namespaces[@]} -eq 0 ]; then
+                  echo "No battlegroup found"
+                  return
+          elif [ ${#namespaces[@]} -eq 1 ]; then
+                  ns="${namespaces[0]}"
+          else
+                  for i in "${!namespaces[@]}"; do
+                          echo "$((i+1)). ${namespaces[$i]#$BATTLEGROUP_PREFIX}"
+                  done
+>                 read -p "Select battlegroup: " ns_index
+                  if ! [[ "$ns_index" =~ ^[0-9]+$ ]] || [ "$ns_index" -lt 1 ] || [ "$ns_index" -gt ${#namespaces[@]} ]; then
+                          echo "Invalid selection."
+                          return
+                  fi
+                  ns="${namespaces[$((ns_index-1))]}"
+          fi
+          bgname=${ns#$BATTLEGROUP_PREFIX}
+          echo "Battlegroup Info"
+          printf "%-10s %-10s %-10s %-10s %-8s\n" "Status" "Database" "Gateway" "Director" "Uptime"
+          printf "%-10s %-10s %-10s %-10s %-8s\n" "----------" "----------" "----------" "----------" "--------"
+>         sudo kubectl get battlegroups -n "$ns" --no-headers | awk '{
+          printf "%-10s %-10s %-10s %-10s %-8s\n", $3, $6, $8, $9, $11
+          }'
+          echo
+          echo "Game Servers"
+          printf "%-15s %-22s %-6s %-8s %-6s\n" "Map" "Phase" "Ready" "Players" "Age"
+          printf "%-15s %-22s %-6s %-8s %-6s\n" "---------------" "----------------------" "------" "--------" "------"
+          sudo kubectl get serverstats -n "$ns" --no-headers | awk '{
+          local timeout=90 elapsed=0 phase
+          echo "Waiting for battlegroup $bgname to shut down..."
+          while [ "$elapsed" -lt "$timeout" ]; do
+>                 phase=$(sudo kubectl get battlegroup "$bgname" -n "$BATTLEGROUP_PREFIX$bgname" --no-headers 2>/dev/null | awk '{print $3}')
+                  if [ "$phase" = "$stopped_phase" ]; then
+                          echo "Battlegroup $bgname stopped."
+                          return 0
+                  fi
+                  sleep 5
+                  elapsed=$((elapsed + 5))
+                  echo "  Still shutting down... (${elapsed}s / ${timeout}s, phase=${phase:-unknown})"
+  }
+  
+  stop_battlegroup() {
+>         error_output=$(sudo kubectl patch battlegroup $bgname -n $BATTLEGROUP_PREFIX$bgname --type=merge -p '{"spec":{"stop":true}}' 2>&1 >/dev/null)
+          if [ $? -ne 0 ]; then
+                  printf '\033[31mERROR: Failed to stop battlegroup %s\n%s\033[0m\n' "$bgname" "$error_output" >&2
+                  exit 1
+          fi
+          echo "Battlegroup: $bgname is stopping"
+          wait_for_battlegroup_stopped
+  }
+  	    # after the VM starts
+          local timeout=120 elapsed=0 error_output
+          while :; do
+>                 error_output=$(sudo kubectl patch battlegroup $bgname -n $BATTLEGROUP_PREFIX$bgname --type=merge -p '{"spec":{"stop":false}}' 2>&1 >/dev/null)
+                  if [ $? -eq 0 ]; then
+                          break
+                  fi
+                  if [ "$elapsed" -lt "$timeout" ] && printf '%s' "$error_output" | grep -q 'no endpoints available\|failed calling webhook'; then
+                          if [ "$elapsed" -eq 0 ]; then
+                                  echo "Waiting for the battlegroup operator webhook to be ready..."
+                          fi
+  }
+  
+  edit_battlegroup() {
+>         sudo KUBE_EDITOR="$DOWNLOAD_PATH/scripts/bg-util" kubectl edit battlegroup "$bgname" -n "$ns"
+  }
+  
+  edit_battlegroup_advanced() {
+>         sudo kubectl edit battlegroup "$bgname" -n "$ns"
+  }
+  
+  get_available_battlegroup_revisions() {
+          sudo ctr -n k8s.io images ls -q | grep seabass-server | cut -d: -f2- | uniq | sort
+  }
+  
+  get_available_operator_revisions() {
+                  for i in "${!revisions[@]}"; do
+                          echo "$((i+1)). ${revisions[$i]}"
+                  done
+>                 read -p "Select revision: " rev_index
+                  if ! [[ "$rev_index" =~ ^[0-9]+$ ]] || [ "$rev_index" -lt 1 ] || [ "$rev_index" -gt ${#revisions[@]} ]; then
+                          echo "Invalid selection."
+                          exit 1
+                  fi
+                  new_revision="${revisions[$((rev_index-1))]}"
+          fi
+  
+>         # Create a sudo kubectl patch operation for each instance of image properties we want to update
+>         PATCH_OPERATIONS=$(sudo kubectl get battlegroup "$bgname" -n "$ns" -o json | \
+          jq --arg image_pattern "$IMAGE_PATTERN" --arg new_revision "$new_revision" '
+                  [
+                  paths as $p |
+                  select(getpath($p) | type == "string" and test($image_pattern)) |
+                  select($p[-1] == "image") |
+                  {
+                          op: "replace",
+                  ]
+          ')
+  
+>         error_output=$(sudo kubectl patch battlegroup "$bgname" -n "$ns" --type=json -p "$PATCH_OPERATIONS" 2>&1 >/dev/null)
+          if [ $? -ne 0 ]; then
+                  printf '\033[31mERROR: Failed to update battlegroup %s to %s\n%s\033[0m\n' "$bgname" "$new_revision" "$error_output" >&2
+                  exit 1
+          fi
+          echo "Battlegroup: $bgname updated to $new_revision"
+  }
+  
+          mkdir -p "$log_dir"
+          pods=( $(sudo kubectl get pods -n "$ns" --no-headers -o custom-columns=NAME:.metadata.name 2>/tmp/kubectl_err) )
+          if [ $? -ne 0 ]; then
+>                 printf '\033[31mERROR: kubectl failed for battlegroup %s\n%s\033[0m\n' "$bgname" "$(cat /tmp/kubectl_err)" >&2
+                  exit 1
+          fi
+          if [ ${#pods[@]} -eq 0 ]; then
+                  printf '\033[31mERROR: No pods found in battlegroup %s\033[0m\n' "$bgname" >&2
+                  exit 1
+          fi
+  
+          # Capture the battlegroup spec alongside the dump so the BG can be reconstructed if needed.
+          local spec_path="$host_path.yaml"
+          echo "Saving battlegroup spec to $spec_path"
+>         if ! sudo kubectl get battlegroup "$bgname" -n "$ns" -o yaml | sudo tee "$spec_path" >/dev/null; then
+                  printf '\033[33mWARNING: Failed to save battlegroup spec to %s\033[0m\n' "$spec_path" >&2
+          fi
+  }
+  
+  import_battlegroup_database() {
+          # Optional first arg: backup file name. If omitted, lets the user pick from existing backups.
+          local backup_name="$1"
+                          mtime=$(sudo stat -c '%y' "$host_dir/${backups[$i]}" 2>/dev/null | cut -d. -f1)
+                          printf "  %d. %-40s %10s  %s\n" "$((i+1))" "${backups[$i]}" "${size:-?}" "${mtime:-?}"
+                  done
+>                 read -p "Select backup: " backup_index
+                  if ! [[ "$backup_index" =~ ^[0-9]+$ ]] || [ "$backup_index" -lt 1 ] || [ "$backup_index" -gt ${#backups[@]} ]; then
+                          echo "Invalid selection."
+                          exit 1
+                  fi
+                  backup_name="${backups[$((backup_index-1))]}"
+          else
+                  if ! sudo test -f "$host_dir/$backup_name"; then
+          get_battlegroup_status
+          ;;
+  
+>         start)
+          start_battlegroup
+          ;;
+  
+>         restart)
+          restart_battlegroup
+          ;;
+  
+>         stop)
+          stop_battlegroup
+          ;;
+  
+          edit)
+          edit_battlegroup
+          ;;

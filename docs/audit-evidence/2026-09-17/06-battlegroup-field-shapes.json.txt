@@ -1,0 +1,111 @@
+{
+  "publicArchive": true,
+  "note": "Deduplicated field/type shapes; instance cardinality omitted.",
+  "shapes": [
+    {
+      "Field": "database",
+      "Type": "PSCustomObject",
+      "ChildFields": "address,pgHeroAddress,phase"
+    },
+    {
+      "Field": "phase",
+      "Type": "String",
+      "ChildFields": ""
+    },
+    {
+      "Field": "serverGroupPhase",
+      "Type": "String",
+      "ChildFields": ""
+    },
+    {
+      "Field": "servers",
+      "Type": "Object[]",
+      "ChildFields": ""
+    },
+    {
+      "Field": "size",
+      "Type": "Int64",
+      "ChildFields": ""
+    },
+    {
+      "Field": "startTimestamp",
+      "Type": "DateTime",
+      "ChildFields": ""
+    },
+    {
+      "Field": "utilities",
+      "Type": "PSCustomObject",
+      "ChildFields": "director,fileBrowser,messageQueues,serverGateway,textRouter"
+    },
+    {
+      "ServerField": "containerUid",
+      "Type": "String",
+      "ChildFields": ""
+    },
+    {
+      "ServerField": "dimensionIndex",
+      "Type": "Int64",
+      "ChildFields": ""
+    },
+    {
+      "ServerField": "gamePid",
+      "Type": "Int64",
+      "ChildFields": ""
+    },
+    {
+      "ServerField": "gamePort",
+      "Type": "Int64",
+      "ChildFields": ""
+    },
+    {
+      "ServerField": "igwPort",
+      "Type": "Int64",
+      "ChildFields": ""
+    },
+    {
+      "ServerField": "ip",
+      "Type": "String",
+      "ChildFields": ""
+    },
+    {
+      "ServerField": "ordinalIndex",
+      "Type": "Int64",
+      "ChildFields": ""
+    },
+    {
+      "ServerField": "partitionIndex",
+      "Type": "Int64",
+      "ChildFields": ""
+    },
+    {
+      "ServerField": "partitionMap",
+      "Type": "String",
+      "ChildFields": ""
+    },
+    {
+      "ServerField": "phase",
+      "Type": "String",
+      "ChildFields": ""
+    },
+    {
+      "ServerField": "ready",
+      "Type": "Boolean",
+      "ChildFields": ""
+    },
+    {
+      "ServerField": "restarts",
+      "Type": "Int64",
+      "ChildFields": ""
+    },
+    {
+      "ServerField": "serverGuid",
+      "Type": "String",
+      "ChildFields": ""
+    },
+    {
+      "ServerField": "sshPort",
+      "Type": "Int64",
+      "ChildFields": ""
+    }
+  ]
+}
