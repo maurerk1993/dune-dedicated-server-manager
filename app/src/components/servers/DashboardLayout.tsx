@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import type { DragEvent, ReactNode } from "react";
-import { ArrowDownIcon, ArrowUpIcon, DragHandleDots2Icon } from "@radix-ui/react-icons";
+import { DragHandleDots2Icon } from "@radix-ui/react-icons";
+import { createPortal } from "react-dom";
 import {
   DEFAULT_DASHBOARD_ORDER, DASHBOARD_SECTION_LABELS, moveDashboardSection,
   readDashboardOrder, saveDashboardOrder,
@@ -10,9 +11,10 @@ import type { DashboardSectionId } from "../../utils/dashboard-layout";
 type DropTarget = { id: DashboardSectionId; edge: "before" | "after" };
 
 /** Presentation-only ordering: no server calls or changes to child action guards. */
-export default function DashboardLayout({ sections, attention }: {
-  sections: Record<DashboardSectionId, ReactNode>;
+export default function DashboardLayout({ sections, attention, resetTarget }: {
+  sections: Record<DashboardSectionId, (handle: ReactNode) => ReactNode>;
   attention?: ReactNode;
+  resetTarget?: HTMLElement | null;
 }) {
   const [order, setOrder] = useState<DashboardSectionId[]>(() => {
     try { return readDashboardOrder(window.localStorage); }
@@ -58,13 +60,11 @@ export default function DashboardLayout({ sections, attention }: {
       onDropCapture={(event) => {
         if (!dragging.current) { event.preventDefault(); event.stopPropagation(); }
       }}>
-      <div className="dashboard-layout-toolbar">
-        <span>Drag section handles or use the arrows to reorder. Saved on this computer.</span>
-        <button type="button" onClick={() => {
+      {resetTarget ? createPortal(
+        <button type="button" className="dashboard-reset-layout" onClick={() => {
           clearDrag();
           commit([...DEFAULT_DASHBOARD_ORDER], "Default dashboard order restored.");
-        }}>Reset layout</button>
-      </div>
+        }}>Reset layout</button>, resetTarget) : null}
       <div className="dashboard-layout-announcement" role="status" aria-live="polite">{announcement}</div>
       {saveFailed ? <div role="status" className="dashboard-section-note">
         Layout changed for this session, but could not be saved on this computer.
@@ -94,7 +94,7 @@ export default function DashboardLayout({ sections, attention }: {
             if (source !== id) move(source, id, targetAt(event, id).edge, false);
             clearDrag();
           }}>
-          <div className="dashboard-reorder-controls" role="group" aria-label={`Reorder ${DASHBOARD_SECTION_LABELS[id]}`}>
+          {sections[id](
             <button type="button" className="dashboard-drag-handle" draggable
               ref={(element) => { handles.current[id] = element; }}
               aria-label={`Move ${DASHBOARD_SECTION_LABELS[id]}. Drag or use Arrow Up and Arrow Down.`}
@@ -115,14 +115,9 @@ export default function DashboardLayout({ sections, attention }: {
                 const target = order[index + offset];
                 if (target) move(id, target, offset < 0 ? "before" : "after");
               }}>
-              <DragHandleDots2Icon aria-hidden /> <span>Drag to reorder</span>
+              <DragHandleDots2Icon aria-hidden />
             </button>
-            <button type="button" disabled={index === 0} aria-label={`Move ${DASHBOARD_SECTION_LABELS[id]} up`}
-              title="Move section up" onClick={() => move(id, order[index - 1], "before")}><ArrowUpIcon aria-hidden /></button>
-            <button type="button" disabled={index === order.length - 1} aria-label={`Move ${DASHBOARD_SECTION_LABELS[id]} down`}
-              title="Move section down" onClick={() => move(id, order[index + 1], "after")}><ArrowDownIcon aria-hidden /></button>
-          </div>
-          {sections[id]}
+          )}
         </div>
       ))}
     </div>

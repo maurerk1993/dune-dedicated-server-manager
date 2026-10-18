@@ -94,6 +94,7 @@ export default function ServerDetailPage(props: ServerDetailPageProps) {
   const tunnelState = useManagementTunnel(server, managementReady);
   const tunnelId = tunnelState.kind === "ready" ? tunnelState.tunnelId : null;
   const [adminPrefill, setAdminPrefill] = useState<AdminTabPrefill>(null);
+  const [layoutResetTarget, setLayoutResetTarget] = useState<HTMLDivElement | null>(null);
 
   const goToAdmin = useCallback(
     (prefill: AdminTabPrefill) => {
@@ -149,22 +150,26 @@ export default function ServerDetailPage(props: ServerDetailPageProps) {
           value={sub}
           onValueChange={(value) => onSubChange(value as ServerSubPage)}
         >
-          <Tabs.List size="2" color="bronze">
-            <Tabs.Trigger value="dashboard">Dashboard</Tabs.Trigger>
-            <Tabs.Trigger value="maps">Maps</Tabs.Trigger>
-            <Tabs.Trigger value="pods">Pods</Tabs.Trigger>
-            {managementReady ? (
-              <>
-                <Tabs.Trigger value="users">Users</Tabs.Trigger>
-                <Tabs.Trigger value="admin">Admin</Tabs.Trigger>
-                <Tabs.Trigger value="welcome">Welcome Package</Tabs.Trigger>
-                <Tabs.Trigger value="tasks">Automated tasks</Tabs.Trigger>
-              </>
-            ) : null}
-          </Tabs.List>
+          <div className="server-detail-tab-bar">
+            <Tabs.List size="2" color="bronze">
+              <Tabs.Trigger value="dashboard">Dashboard</Tabs.Trigger>
+              <Tabs.Trigger value="maps">Maps</Tabs.Trigger>
+              <Tabs.Trigger value="pods">Pods</Tabs.Trigger>
+              {managementReady ? (
+                <>
+                  <Tabs.Trigger value="users">Users</Tabs.Trigger>
+                  <Tabs.Trigger value="admin">Admin</Tabs.Trigger>
+                  <Tabs.Trigger value="welcome">Welcome Package</Tabs.Trigger>
+                  <Tabs.Trigger value="tasks">Automated tasks</Tabs.Trigger>
+                </>
+              ) : null}
+            </Tabs.List>
+            <div ref={setLayoutResetTarget} className="dashboard-reset-slot" />
+          </div>
 
           <Tabs.Content value="dashboard" className="server-detail-tab-content">
             <ServerDashboard
+              resetTarget={layoutResetTarget}
               server={server}
               status={status}
               statusError={statusError}

@@ -1,9 +1,11 @@
 import type { RemoteServerStatus } from "../../types/server";
+import type { ReactNode } from "react";
 import { isSnapshotStale } from "../../utils/dashboard";
 import { isBattlegroupStarted } from "../../utils/remote-server";
 import ActionButton from "../ui/ActionButton";
 
 export type BattlegroupControlProps = {
+  dragHandle?: ReactNode;
   status?: RemoteServerStatus;
   statusError?: string;
   busyLabel?: string;
@@ -15,6 +17,7 @@ export type BattlegroupControlProps = {
 
 /** Shared lifecycle controls so every tab applies the same stale-snapshot guard. */
 export default function BattlegroupControl({
+  dragHandle,
   status,
   statusError,
   busyLabel,
@@ -37,7 +40,7 @@ export default function BattlegroupControl({
   return (
     <section className="dashboard-section dashboard-control-section">
       <div>
-        <div className="dashboard-section-title">Battlegroup control</div>
+        <div className="dashboard-section-title">{dragHandle}Battlegroup control</div>
         <div className="dashboard-section-subtitle">
           {actionableStatus
             ? "Lifecycle actions use the latest verified snapshot."

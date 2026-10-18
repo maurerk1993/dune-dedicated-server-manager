@@ -15,6 +15,13 @@ try {
   await page.locator("[data-dashboard-section=maps]").waitFor();
   const original = await ids();
   assert.equal(original.length, 7);
+  assert.equal(await page.locator('.dashboard-reorder-controls, .dashboard-layout-toolbar').count(), 0);
+  assert.equal(await page.getByText('Drag to reorder', { exact: true }).count(), 0);
+  assert.equal(await page.locator('section .dashboard-drag-handle').count(), 7, 'grips live inside existing cards');
+  assert.equal(await page.locator('.server-detail-tab-bar').getByRole('button', { name: 'Reset layout' }).count(), 1);
+  await page.getByRole('tab', { name: 'Maps', exact: true }).click();
+  assert.equal(await page.getByRole('button', { name: 'Reset layout' }).count(), 0);
+  await page.getByRole('tab', { name: 'Dashboard', exact: true }).click();
   // Starting then cancelling a drag must not persist or change an order.
   const dragData = await page.evaluateHandle(() => new DataTransfer());
   await handle("maps").dispatchEvent("dragstart", { dataTransfer: dragData });
@@ -50,9 +57,10 @@ try {
   await handle("maps").focus();
   await page.keyboard.press("ArrowDown");
   assert.equal((await ids())[1], "maps");
-  await page.getByRole("button", { name: "Move Maps and players up", exact: true }).click();
+  await handle("maps").press("ArrowUp");
   assert.equal((await ids())[0], "maps");
-  assert.ok(await page.getByRole("button", { name: "Move Maps and players up", exact: true }).isDisabled());
+  await handle("maps").press("ArrowUp");
+  assert.equal((await ids())[0], "maps", "first section cannot move above boundary");
   await page.getByRole("button", { name: "Dismiss current attention notices" }).click();
   assert.equal(await page.getByRole("region", { name: "Needs attention" }).count(), 0);
   assert.equal(await page.locator(".dashboard-layout-announcement").textContent(), "Maps and players moved to position 1 of 7.");
@@ -70,9 +78,9 @@ try {
   await handle("maps").waitFor();
   assert.deepEqual(await ids(), original, "corrupt preference does not break dashboard");
   await page.evaluate(() => { Storage.prototype.setItem = () => { throw Error("blocked"); }; });
-  await page.getByRole("button", { name: "Move Maps and players up", exact: true }).click();
+  await handle("maps").press("ArrowUp");
   assert.ok(await page.getByText("Layout changed for this session, but could not be saved on this computer.").isVisible());
   assert.equal(await page.getByLabel("Action count").textContent(), "0");
   assert.deepEqual(errors, []);
-  console.log("PASS: real drag/drop, persistence, keyboard/buttons, refresh/server switch, alerts, reset, corrupt/blocked storage, responsive layout, no server actions.");
+  console.log("PASS: compact embedded grips, header reset, tab switching, real drag/drop, persistence, keyboard, refresh/server switch, alerts, reset, corrupt/blocked storage, responsive layout, no server actions.");
 } finally { await browser.close(); }
