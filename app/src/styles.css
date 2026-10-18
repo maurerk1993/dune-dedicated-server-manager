@@ -742,6 +742,69 @@ body {
 }
 
 /* Dashboard overview */
+.dashboard-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.dashboard-layout-toolbar,
+.dashboard-reorder-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.dashboard-layout-toolbar { justify-content: space-between; gap: 12px; }
+.dashboard-reorder-controls { justify-content: flex-end; margin-bottom: 5px; }
+.dashboard-layout-toolbar button,
+.dashboard-reorder-controls button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 28px;
+  min-width: 28px;
+  padding: 4px 7px;
+  border: 1px solid var(--color-border-hair);
+  border-radius: var(--radius-2);
+  background: var(--color-bg-panel);
+  color: var(--color-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+.dashboard-reorder-controls .dashboard-drag-handle { cursor: grab; }
+.dashboard-reorder-controls .dashboard-drag-handle:active { cursor: grabbing; }
+.dashboard-layout button:focus-visible { outline: 2px solid var(--color-text-primary); outline-offset: 3px; }
+.dashboard-reorder-controls button:disabled { opacity: 0.35; cursor: default; }
+.dashboard-layout-section { position: relative; min-width: 0; }
+.dashboard-layout-section[data-dragging] { opacity: 0.55; }
+.dashboard-layout-section[data-drop-edge]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--color-text-primary);
+  pointer-events: none;
+}
+.dashboard-layout-section[data-drop-edge="before"]::after { top: -8px; }
+.dashboard-layout-section[data-drop-edge="after"]::after { bottom: -8px; }
+.dashboard-layout-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .dashboard-overview {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
