@@ -154,6 +154,10 @@ jobs:
             Start-Sleep -Seconds (15 * $attempt)
           }
 
+      - name: Test dashboard layout preferences
+        working-directory: app
+        run: npm run test:dashboard-layout
+
       - name: Download bundled dune-server-service binary
         uses: actions/download-artifact@v4
         with:

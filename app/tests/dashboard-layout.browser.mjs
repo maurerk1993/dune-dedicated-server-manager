@@ -1,0 +1,78 @@
+// Run against `npm run dev`; uses an isolated browser context, never the installed app.
+// Supply PLAYWRIGHT_MODULE for a preinstalled Playwright package, or install it locally.
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE || "playwright");
+const browser = await chromium.launch({ channel: "msedge", headless: true });
+try {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  const url = "http://127.0.0.1:1420/tests/dashboard-layout.html";
+  const ids = () => page.locator("[data-dashboard-section]").evaluateAll((nodes) => nodes.map((n) => n.dataset.dashboardSection));
+  const handle = (id) => page.locator(`[data-dashboard-section="${id}"] .dashboard-drag-handle`);
+  await page.goto(url);
+  await page.locator("[data-dashboard-section=maps]").waitFor();
+  const original = await ids();
+  assert.equal(original.length, 7);
+  // Starting then cancelling a drag must not persist or change an order.
+  const dragData = await page.evaluateHandle(() => new DataTransfer());
+  await handle("maps").dispatchEvent("dragstart", { dataTransfer: dragData });
+  await handle("maps").dispatchEvent("dragend", { dataTransfer: dragData });
+  assert.deepEqual(await ids(), original);
+  assert.equal(await page.locator("[data-dragging], [data-drop-edge]").count(), 0);
+  await dragData.dispose();
+  await handle("maps").dragTo(page.locator("[data-dashboard-section=overview]"), { targetPosition: { x: 20, y: 5 } });
+  assert.equal((await ids())[0], "maps", "native drag puts maps above overview");
+  const services = page.locator("[data-dashboard-section=services]");
+  // Start the native drag before scrolling its destination into view. Otherwise
+  // Edge can start dragging the element scrolled under the pointer by dragTo.
+  await handle("maps").scrollIntoViewIfNeeded();
+  const sourceBounds = await handle("maps").boundingBox();
+  const x = sourceBounds.x + sourceBounds.width / 2;
+  const y = sourceBounds.y + sourceBounds.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 12, y + 8, { steps: 5 });
+  await services.scrollIntoViewIfNeeded();
+  const servicesBounds = await services.boundingBox();
+  await page.mouse.move(servicesBounds.x + 20, servicesBounds.y + servicesBounds.height - 10, { steps: 10 });
+  await page.mouse.move(servicesBounds.x + 21, servicesBounds.y + servicesBounds.height - 9);
+  await page.mouse.up();
+  assert.deepEqual(await ids(), original, "native drag also moves sections downward");
+  await handle("maps").dragTo(page.locator("[data-dashboard-section=overview]"), { targetPosition: { x: 20, y: 5 } });
+  await page.reload();
+  await handle("maps").waitFor();
+  assert.equal((await ids())[0], "maps", "saved order survives reload");
+  await page.getByRole("button", { name: "Simulate refresh", exact: true }).click();
+  await page.getByRole("button", { name: "Switch server", exact: true }).click();
+  assert.equal((await ids())[0], "maps", "refresh and switching server preserve order");
+  await handle("maps").focus();
+  await page.keyboard.press("ArrowDown");
+  assert.equal((await ids())[1], "maps");
+  await page.getByRole("button", { name: "Move Maps and players up", exact: true }).click();
+  assert.equal((await ids())[0], "maps");
+  assert.ok(await page.getByRole("button", { name: "Move Maps and players up", exact: true }).isDisabled());
+  await page.getByRole("button", { name: "Dismiss current attention notices" }).click();
+  assert.equal(await page.getByRole("region", { name: "Needs attention" }).count(), 0);
+  assert.equal(await page.locator(".dashboard-layout-announcement").textContent(), "Maps and players moved to position 1 of 7.");
+  assert.equal(await page.getByLabel("Action count").textContent(), "0", "reordering must not execute server actions");
+  if (process.env.DASHBOARD_SCREENSHOT) await page.screenshot({ path: process.env.DASHBOARD_SCREENSHOT, fullPage: true });
+  await page.setViewportSize({ width: 960, height: 640 });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+  await page.getByRole("button", { name: "Reset layout", exact: true }).click();
+  assert.deepEqual(await ids(), original);
+  await page.reload();
+  await handle("maps").waitFor();
+  assert.deepEqual(await ids(), original);
+  await page.evaluate(() => localStorage.setItem("dune-manager.dashboard-layout.v1", "{broken"));
+  await page.reload();
+  await handle("maps").waitFor();
+  assert.deepEqual(await ids(), original, "corrupt preference does not break dashboard");
+  await page.evaluate(() => { Storage.prototype.setItem = () => { throw Error("blocked"); }; });
+  await page.getByRole("button", { name: "Move Maps and players up", exact: true }).click();
+  assert.ok(await page.getByText("Layout changed for this session, but could not be saved on this computer.").isVisible());
+  assert.equal(await page.getByLabel("Action count").textContent(), "0");
+  assert.deepEqual(errors, []);
+  console.log("PASS: real drag/drop, persistence, keyboard/buttons, refresh/server switch, alerts, reset, corrupt/blocked storage, responsive layout, no server actions.");
+} finally { await browser.close(); }

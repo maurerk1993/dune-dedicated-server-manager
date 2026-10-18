@@ -1,11 +1,12 @@
 {
   "name": "dune-dedicated-server-manager-app",
   "private": true,
-  "version": "0.8.0",
+  "version": "0.9.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 1420",
     "build": "tsc && vite build",
+    "test:dashboard-layout": "node --experimental-strip-types --test tests/dashboard-layout.test.mjs",
     "preview": "vite preview --host 127.0.0.1 --port 1420",
     "tauri": "tauri"
   },
