@@ -749,20 +749,17 @@ body {
   min-width: 0;
 }
 
-.dashboard-layout-toolbar,
-.dashboard-reorder-controls {
+.server-detail-tab-bar {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  color: var(--color-text-muted);
-  font-size: 11px;
+  gap: 12px;
+  min-width: 0;
 }
-
-.dashboard-layout-toolbar { justify-content: space-between; gap: 12px; }
-.dashboard-reorder-controls { justify-content: flex-end; margin-bottom: 5px; }
-.dashboard-layout-toolbar button,
-.dashboard-reorder-controls button {
+.server-detail-tab-bar > .rt-TabsList { flex: 1; min-width: 0; overflow-x: auto; }
+.dashboard-reset-slot { flex-shrink: 0; margin-left: auto; }
+.dashboard-reset-slot:empty { display: none; }
+.dashboard-reset-layout {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -777,10 +774,25 @@ body {
   font: inherit;
   cursor: pointer;
 }
-.dashboard-reorder-controls .dashboard-drag-handle { cursor: grab; }
-.dashboard-reorder-controls .dashboard-drag-handle:active { cursor: grabbing; }
-.dashboard-layout button:focus-visible { outline: 2px solid var(--color-text-primary); outline-offset: 3px; }
-.dashboard-reorder-controls button:disabled { opacity: 0.35; cursor: default; }
+.dashboard-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 20px;
+  padding: 0;
+  margin: -2px 5px -2px -5px;
+  vertical-align: middle;
+  border: 0;
+  border-radius: var(--radius-2);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: grab;
+}
+.dashboard-drag-handle:hover { color: var(--color-text-primary); background: var(--color-bg-panel); }
+.dashboard-drag-handle:active { cursor: grabbing; }
+.dashboard-layout button:focus-visible,
+.dashboard-reset-layout:focus-visible { outline: 2px solid var(--color-text-primary); outline-offset: 3px; }
 .dashboard-layout-section { position: relative; min-width: 0; }
 .dashboard-layout-section[data-dragging] { opacity: 0.55; }
 .dashboard-layout-section[data-drop-edge]::after {

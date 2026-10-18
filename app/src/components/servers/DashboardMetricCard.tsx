@@ -1,6 +1,8 @@
 import type { StatusTone } from "../ui/StatusPill";
+import type { ReactNode } from "react";
 
 export type DashboardMetricCardProps = {
+  dragHandle?: ReactNode;
   label: string;
   value: string;
   detail: string;
@@ -9,6 +11,7 @@ export type DashboardMetricCardProps = {
 };
 
 export default function DashboardMetricCard({
+  dragHandle,
   label,
   value,
   detail,
@@ -23,7 +26,7 @@ export default function DashboardMetricCard({
   return (
     <div className="dashboard-metric-card" data-tone={tone}>
       <div className="dashboard-metric-header">
-        <span className="dashboard-metric-label">{label}</span>
+        <span className="dashboard-metric-label">{dragHandle}{label}</span>
         <span className="dashboard-metric-indicator" aria-hidden />
       </div>
       <div className="dashboard-metric-value">{value || "—"}</div>

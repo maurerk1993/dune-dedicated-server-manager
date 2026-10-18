@@ -43,6 +43,7 @@ import DashboardMetricCard from "./DashboardMetricCard";
 import ServerServiceGrid from "./ServerServiceGrid";
 
 export type ServerDashboardProps = {
+  resetTarget?: HTMLElement | null;
   server: RemoteServerRecord;
   status?: RemoteServerStatus;
   statusError?: string;
@@ -67,6 +68,7 @@ export type ServerDashboardProps = {
  * table, lifecycle action row (start/stop/restart), and tunnel controls.
  */
 export default function ServerDashboard({
+  resetTarget,
   server,
   status,
   statusError,
@@ -113,6 +115,7 @@ export default function ServerDashboard({
 
   return (
     <DashboardLayout
+      resetTarget={resetTarget}
       attention={showAttention ? (
         <section className="dashboard-attention" aria-label="Needs attention">
           <div className="dashboard-attention-heading">
@@ -149,9 +152,10 @@ export default function ServerDashboard({
         </section>
       ) : null}
       sections={{
-        overview: (
+        overview: (handle) => (
           <section className="dashboard-overview" aria-label="Server overview">
             <DashboardMetricCard
+              dragHandle={handle}
               label="Players online"
               value={players === null ? "—" : players.toString()}
               detail={
@@ -232,11 +236,11 @@ export default function ServerDashboard({
             />
           </section>
         ),
-        services: (
+        services: (handle) => (
           <section className="dashboard-section">
             <div className="dashboard-section-heading">
               <div>
-                <div className="dashboard-section-title">Battlegroup services</div>
+                <div className="dashboard-section-title">{handle}Battlegroup services</div>
                 <div className="dashboard-section-subtitle">
                   The Kubernetes pods that keep this Dune battlegroup running.
                 </div>
@@ -250,11 +254,11 @@ export default function ServerDashboard({
             <ServerServiceGrid components={components} />
           </section>
         ),
-        maps: (
+        maps: (handle) => (
           <section className="dashboard-section">
             <div className="dashboard-section-heading">
               <div>
-                <div className="dashboard-section-title">Maps and players</div>
+                <div className="dashboard-section-title">{handle}Maps and players</div>
                 <div className="dashboard-section-subtitle">
                   Current game-server readiness and connected players by partition.
                 </div>
@@ -270,8 +274,9 @@ export default function ServerDashboard({
             )}
           </section>
         ),
-        control: (
+        control: (handle) => (
           <BattlegroupControl
+            dragHandle={handle}
             status={status}
             statusError={statusError}
             busyLabel={busyLabel}
@@ -281,11 +286,11 @@ export default function ServerDashboard({
             onRestart={onRestartBattlegroup}
           />
         ),
-        technical: (
+        technical: (handle) => (
           <section className="dashboard-section dashboard-technical-section">
             <div className="dashboard-section-heading">
               <div>
-                <div className="dashboard-section-title">Technical details</div>
+                <div className="dashboard-section-title">{handle}Technical details</div>
                 <div className="dashboard-section-subtitle">
                   Deployment identifiers and operator-reported phases.
                 </div>
@@ -319,9 +324,9 @@ export default function ServerDashboard({
             </div>
           </section>
         ),
-        management: (
+        management: (handle) => (
           <section className="dashboard-section">
-            <div className="dashboard-section-title">Management service</div>
+            <div className="dashboard-section-title">{handle}Management service</div>
             <div className="dashboard-section-subtitle">
               Status and maintenance for the optional Dune management daemon.
             </div>
@@ -333,9 +338,9 @@ export default function ServerDashboard({
             />
           </section>
         ),
-        connections: (
+        connections: (handle) => (
           <section className="dashboard-section">
-            <div className="dashboard-section-title">Connections</div>
+            <div className="dashboard-section-title">{handle}Connections</div>
             <div className="dashboard-section-subtitle">
               Secure local tunnels to battlegroup tools and custom services.
             </div>

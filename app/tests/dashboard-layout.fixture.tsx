@@ -1,7 +1,7 @@
 // Isolated browser fixture: synthetic data, no live profiles or backend actions.
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Theme } from "@radix-ui/themes";
+import { Theme, Tabs } from "@radix-ui/themes";
 import "@radix-ui/themes/styles.css";
 import "../src/styles.css";
 import ServerDashboard from "../src/components/servers/ServerDashboard";
@@ -10,13 +10,24 @@ function Fixture() {
   const [refreshes, setRefreshes] = useState(0);
   const [server, setServer] = useState("example-one");
   const [actions, setActions] = useState(0);
+  const [resetTarget, setResetTarget] = useState<HTMLDivElement | null>(null);
   const action = () => setActions((count) => count + 1);
   return <Theme appearance="dark"><main style={{ padding: 24, height: "100vh", overflow: "auto" }}>
     <button onClick={() => setRefreshes((count) => count + 1)}>Simulate refresh</button>
     <button onClick={() => setServer((id) => id === "example-one" ? "example-two" : "example-one")}>Switch server</button>
     <output aria-label="Action count">{actions}</output>
     <output aria-label="Refresh count">{refreshes}</output>
-    <ServerDashboard
+    <Tabs.Root defaultValue="dashboard">
+      <div className="server-detail-tab-bar">
+        <Tabs.List><Tabs.Trigger value="dashboard">Dashboard</Tabs.Trigger><Tabs.Trigger value="maps">Maps</Tabs.Trigger>
+          <Tabs.Trigger value="pods">Pods</Tabs.Trigger><Tabs.Trigger value="users">Users</Tabs.Trigger>
+          <Tabs.Trigger value="admin">Admin</Tabs.Trigger><Tabs.Trigger value="welcome">Welcome Package</Tabs.Trigger>
+          <Tabs.Trigger value="tasks">Automated tasks</Tabs.Trigger>
+        </Tabs.List>
+        <div ref={setResetTarget} className="dashboard-reset-slot" />
+      </div>
+      <Tabs.Content value="dashboard">
+    <ServerDashboard resetTarget={resetTarget}
       server={{ type: "ubuntu", id: server, name: "Example", host: "127.0.0.1", user: "fixture", keyPath: "",
         namespace: "example", battlegroupName: "example", worldUniqueName: "example", phase: "Healthy" }}
       status={{ collectedAt: new Date().toISOString(), package: { installedBuildId: "example" },
@@ -31,6 +42,9 @@ function Fixture() {
       onStartBattlegroup={action} onStopBattlegroup={action} onRestartBattlegroup={action}
       onStartTunnel={action} onStartCustomTunnel={action} onStopTunnel={action} onOpenTunnel={action}
     />
+      </Tabs.Content>
+      <Tabs.Content value="maps">Map tab fixture</Tabs.Content>
+    </Tabs.Root>
   </main></Theme>;
 }
 
