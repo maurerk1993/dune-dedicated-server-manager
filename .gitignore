@@ -29,7 +29,7 @@ pnpm-debug.log*
 *.md
 !README.md
 !THIRD_PARTY_NOTICES.md
-AGENTS.md
+!AGENTS.md
 !docs/
 !docs/*.md
 docs/rabbitmq-protocol.md
