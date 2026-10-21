@@ -1,6 +1,6 @@
 [package]
 name = "dune-dedicated-server-manager-app"
-version = "0.9.1"
+version = "0.9.2"
 description = "Desktop shell for Dune Dedicated Server Manager"
 authors = ["Dune Dedicated Server Manager"]
 edition = "2021"
@@ -10,17 +10,19 @@ name = "dune_dedicated_server_manager_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2.7.4", features = [] }
 
 [dependencies]
 dune-manager-core = { path = "../../crates/dune-manager-core" }
-tauri = { version = "2", features = ["devtools"] }
+tauri = { version = "2.12.5", features = ["devtools"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tauri-plugin-dialog = "2"
-tauri-plugin-updater = "2"
-tauri-plugin-process = "2"
-tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2.8.3"
+# This fork publishes signed NSIS .exe, raw AppImage and .deb updates. Keep
+# those paths and proxy/TLS support without the unused legacy ZIP extractor.
+tauri-plugin-updater = { version = "2.14.0", default-features = false, features = ["rustls-tls", "system-proxy"] }
+tauri-plugin-process = "2.4.0"
+tauri-plugin-shell = "2.5.0"
 base64 = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 reqwest = { version = "0.12", default-features = false, features = ["json"] }

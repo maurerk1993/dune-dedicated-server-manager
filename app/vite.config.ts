@@ -8,4 +8,8 @@ export default defineConfig({
     strictPort: true,
   },
   envPrefix: ["VITE_", "TAURI_"],
+  // Preserve the Vite 5 browser baseline when upgrading the build toolchain.
+  build: {
+    target: ["es2020", "edge88", "firefox78", "chrome87", "safari14"],
+  },
 });
