@@ -7,8 +7,36 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  service-resource:
+    name: Build Linux service resource for checks
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      # Desktop checks require the configured bundled files on a fresh checkout.
+      # This native Linux binary is CI-only; releases use the musl build in release.yml.
+      - name: Build and stage service resources
+        run: |
+          cargo build -p dune-server-service --release --locked
+          mkdir -p ci-service-resources
+          cp target/release/dune-server-service ci-service-resources/
+          cp crates/dune-server-service/systemd/dune-server-service.service ci-service-resources/
+          cp crates/dune-server-service/openrc/dune-server-service ci-service-resources/dune-server-service.openrc
+
+      - name: Upload service resources for desktop checks
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-linux-service-resources
+          path: ci-service-resources/
+          retention-days: 1
+
   checks:
     name: Workspace checks (${{ matrix.platform }})
+    needs: service-resource
     runs-on: ${{ matrix.platform }}
     strategy:
       fail-fast: false
@@ -34,6 +62,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf pkg-config libssl-dev
+
+      - name: Stage bundled service resources
+        uses: actions/download-artifact@v4
+        with:
+          name: ci-linux-service-resources
+          path: app/src-tauri/binaries/
 
       - name: Install frontend dependencies
         working-directory: app
