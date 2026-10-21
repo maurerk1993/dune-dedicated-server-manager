@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Rust stable
-- Node.js 22
+- Node.js 22.12 or newer (required by the Vite 8 build toolchain)
 - npm
 - Git
 
