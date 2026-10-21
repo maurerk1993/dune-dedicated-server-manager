@@ -111,11 +111,13 @@ jobs:
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
+          # Git is available on fresh runners; scan tracked files and report paths only.
           # Match a drive path, not the I: in PostgreSQL's HH24:MI:SS timestamp format.
-          rg -n -S "\bI:[\\/]|AutoUpdate|192\.168\.2\.|menna|dune-awakening|C:\\WINDOWS\\System32\\OpenSSH|C:\\Windows\\System32\\OpenSSH|change-me-before-exposing|c05564d|d177d3bbc40be761|qRmQx|FuncomLiveServices__ServiceAuthToken" . -g "!app/**/target/**" -g "!crates/**/target/**" -g "!target/**" -g "!app/node_modules/**" -g "!app/dist/**" -g "!*.md" -g "!app/steamcmd/**" -g "!app/dune-server/**" -g "!app/vm/**" -g "!app/vm-*/**" -g "!vm/**" -g "!.tmp/**"
+          git grep -I -l -P '\bI:[\\/]|AutoUpdate|192\.168\.2\.|menna|dune-awakening|C:\\WINDOWS\\System32\\OpenSSH|C:\\Windows\\System32\\OpenSSH|change-me-before-exposing|c05564d|d177d3bbc40be761|qRmQx|FuncomLiveServices__ServiceAuthToken' -- . ':(exclude)*.md' ':(exclude).github/workflows/ci.yml' ':(exclude)app/**/target/**' ':(exclude)crates/**/target/**' ':(exclude)target/**' ':(exclude)app/node_modules/**' ':(exclude)app/dist/**' ':(exclude)app/steamcmd/**' ':(exclude)app/dune-server/**' ':(exclude)app/vm/**' ':(exclude)app/vm-*/**' ':(exclude)vm/**' ':(exclude).tmp/**'
           if ($LASTEXITCODE -eq 0) {
             throw "Secret or machine-specific constant scan found matches."
           }
           if ($LASTEXITCODE -ne 1) {
             exit $LASTEXITCODE
           }
+          exit 0
